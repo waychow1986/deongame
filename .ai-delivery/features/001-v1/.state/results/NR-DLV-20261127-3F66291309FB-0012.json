@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "stepId": "S22",
+  "result": "done",
+  "summary": "批次 1（AC-1～AC-5：注册登录、未登录拒绝、开房与大厅列表、加入/满员/离开）已实现：项目骨架、迁移、scrypt 密码与会话、REST 与 socket.io 握手鉴权、房间管理（全局锁、同时只在一个房间、房主转移、无人关闭）、注册/登录/大厅/房间页（手机视口无横向滚动）；会话内运行了 lint、typecheck、build（约 2 秒，均通过），全量单元测试 14 项通过（约 0.4 秒），全量集成测试 21 项（真实 dev PostgreSQL，独立 schema）通过（约 1.5 秒），本批新写的端到端用例 auth.spec.ts 2 个与 rooms.spec.ts 2 个在 chromium 与 mobile 项目共 7 次运行通过、1 次按设计跳过（手机专用用例在 chromium 项目跳过，含构建约 7 秒）；本批为新建项目，测试与实现同批编写，没有单独记录实现前失败的运行；没有既有端到端用例需要运行，也没有运行其他端到端用例，验收标准由 G3 在测试环境中独立验证；没有构建或运行 Docker 镜像（交付测试环境版本是最后一批的任务）。",
+  "asks": [],
+  "outputs": [
+    "package.json",
+    "package-lock.json",
+    "tsconfig.json",
+    "tsconfig.server.json",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "vitest.integration.config.ts",
+    "playwright.config.ts",
+    "eslint.config.js",
+    ".gitignore",
+    ".dockerignore",
+    "Dockerfile",
+    "scripts/copy-migrations.mjs",
+    "README.md",
+    "docs/api.md",
+    "src/shared",
+    "src/server",
+    "src/web",
+    "tests/unit",
+    "tests/integration",
+    "tests/support/server.ts",
+    "e2e/auth.spec.ts",
+    "e2e/rooms.spec.ts",
+    "e2e/support/users.ts"
+  ]
+}
