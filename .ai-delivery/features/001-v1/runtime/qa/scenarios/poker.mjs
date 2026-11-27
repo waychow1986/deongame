@@ -153,12 +153,21 @@ const part1 = [
         return passive(p);
       }, {
         onPoll: (p) => { if (!firstSeen[p.stage]) firstSeen[p.stage] = p.board.length; },
-        onStep: ({ actor, pre, post, choice }) => {
+        onStep: async ({ actor, pre, post, choice }) => {
           if (!post) return;
           if (!firstSeen[post.stage]) firstSeen[post.stage] = post.board.length;
           const a0 = seatOf(pre, actor), a1 = seatOf(post, actor);
           const put = a1.committedThisHand - a0.committedThisHand;
-          if (choice[0] !== 'check') accounting.push({ type: choice[0], put, chips: a0.chips - a1.chips, pot: post.pot - pre.pot });
+          if (choice[0] !== 'check') {
+            // An action that ends the hand already includes the payout in the balance; add it back per the server's settlement.
+            let won = 0;
+            if (OVER.includes(post.stage)) {
+              let settled = post;
+              if (!Array.isArray(settled.winners)) settled = await pk(actor, id);
+              won = (settled.winners || []).filter((w) => w.seat === a1.seat).reduce((a, w) => a + w.amount, 0);
+            }
+            accounting.push({ type: choice[0], put, chips: a0.chips - a1.chips + won, won, pot: post.pot - pre.pot });
+          }
           if (choice[0] === 'bet') betRounds.add(pre.stage);
           if (post.stage !== pre.stage) {
             const newBet = choice[0] === 'call' ? pre.currentBet : a1.committedThisRound;

@@ -169,6 +169,21 @@ const hasN = (txt, label, n) => new RegExp(`${label}\\s*${n < 0 ? '[-−]' + Mat
 const actionShown = (txt, name, type, amount) => txt.split('\n').some((l) => l.includes(name) && l.includes(ACT[type]) && (amount == null || new RegExp(`(?<!\\d)${amount}(?!\\d)`).test(l)));
 const near = (txt, name, amount) => new RegExp(`${esc(name)}[\\s\\S]{0,40}(?<!\\d)${amount}(?!\\d)`).test(txt);
 
+// Resolves true once the page has received a room state push over its realtime connection (any transport).
+function socketReady(page) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (v) => { if (!done) { done = true; resolve(v); } };
+    page.on('websocket', (ws) => ws.on('framereceived', (f) => { if (String(f.payload).includes('"room:state"')) finish(true); }));
+    page.on('response', async (r) => {
+      if (!r.url().includes('/socket.io/')) return;
+      const t = await r.text().catch(() => '');
+      if (t.includes('"room:state"')) finish(true);
+    });
+    setTimeout(() => finish(false), L.WAIT_MS);
+  });
+}
+
 async function pokerPagesShowHandStart(pages, p) {
   const sb = p.seats.find((s) => s.isSmallBlind), bb = p.seats.find((s) => s.isBigBlind), act = p.seats.find((s) => s.seat === p.toActSeat);
   const out = [];
@@ -189,13 +204,20 @@ const pokerPart = [
       const { us, id } = await table('rp', 2, 1);
       const [u1, u2] = us;
       const p1 = await L.newPage(u1), p2 = await L.newPage(u2);
+      const live = [socketReady(p1), socketReady(p2)];
       await Promise.all([p1.goto(`${BASE}/room/${id}`), p2.goto(`${BASE}/room/${id}`)]);
       await Promise.all([p1.getByRole('region', { name: '牌桌' }).waitFor({ timeout: L.WAIT_MS }), p2.getByRole('region', { name: '牌桌' }).waitFor({ timeout: L.WAIT_MS })]);
-      const st = await u1.pokerStart(id);
-      if (st.status !== 200) throw new L.Unreportable(`start rejected ${st.status}`);
-      let p = await pk(u1, id);
-      const r1 = await pokerPagesShowHandStart([p1, p2], p);
-      ctx.cp('1 开始一手：两人页面都显示被扣的盲注、底池、轮到谁', p.pot > 0, r1);
+      // Both pages are in the room with their realtime connection settled before the hand starts.
+      const conn = await Promise.all(live);
+      if (!conn.every(Boolean)) throw new L.Unreportable('page realtime connection not established within limit');
+      await L.sleep(1000);
+      // Real users act from their own page: the host taps 开始牌局, and each human acts on their own page below.
+      await p1.getByRole('button', { name: '开始牌局' }).click({ timeout: L.WAIT_MS }).catch(() => { throw new L.Unreportable('start button not available on host page'); });
+      let p = await L.mustWait(async () => { const q = await pk(u1, id); return q && q.handId && q.stage !== 'idle' ? q : null; }, 'hand started');
+      // Checkpoint 1 is judged on this hand; the hand is driven on regardless so the later checkpoints are observed too.
+      let r1 = null, start1 = null;
+      try { r1 = await pokerPagesShowHandStart([p1, p2], p); } catch (e) { if (!(e instanceof L.Unreportable)) throw e; start1 = e.message; }
+      if (r1) ctx.cp('1 开始一手：两人页面都显示被扣的盲注、底池、轮到谁', p.pot > 0, r1);
 
       // Hands until a showdown is observed (max 5); step 2/3 are checked on the first hand.
       let checked2 = false, sawShowdown = false;
@@ -254,8 +276,7 @@ const pokerPart = [
               const L2 = mine.you.legal;
               const type = L2.raise ? 'raise' : 'bet';
               const amt = L2.minRaiseTo;
-              const r = await u1.act(id, type, amt);
-              if (r.status !== 200) throw new L.Unreportable(`U1 ${type} rejected ${r.status}`);
+              await pageAct(p1, u1, id, mine, type, amt);
               const a = await pk(u1, id);
               const s1 = a.seats.find((s) => s.userId === u1.user.id);
               const nxt = a.seats.find((s) => s.seat === a.toActSeat);
@@ -269,8 +290,7 @@ const pokerPart = [
               botSeen = Math.min(botSeen, a.actions.length);
               continue;
             }
-            const r = await u.act(id, mine.you.legal.check ? 'check' : 'call');
-            if (r.status !== 200) throw new L.Unreportable(`action rejected ${r.status}`);
+            await pageAct(u === u1 ? p1 : p2, u, id, mine, mine.you.legal.check ? 'check' : 'call');
             continue;
           }
           await L.sleep(250);
@@ -279,9 +299,32 @@ const pokerPart = [
       if (checked2 !== true) throw new L.Unreportable('bot action after U1 bet not observed');
       ctx.cp('3 新发的翻牌、转牌、河牌在两人页面都出现', boards.size >= 3, [...boards]);
       if (!sawShowdown) ctx.note && ctx.note('no showdown within 5 hands; checkpoint 4 not reported');
+      if (start1) {
+        L.writeEvidence('TS-36-checkpoint1.txt', start1);
+        if (!ctx.failed) throw new L.Unreportable(`checkpoint 1: ${start1}`);
+      }
     },
   },
 ];
+
+// Acts through the player's own page once it shows that it is their turn; resolves after the server records the action.
+async function pageAct(page, u, id, mine, type, amount = null) {
+  const fold = page.getByRole('button', { name: '弃牌' });
+  const ready = await L.waitFor(async () => (await fold.isEnabled().catch(() => false)) || null, L.WAIT_MS).catch(() => null);
+  if (!ready) throw new L.Unreportable(`own turn not shown on page (${u.user.username})`);
+  const n0 = mine.actions.length;
+  if (type === 'check') await page.getByRole('button', { name: '过牌', exact: true }).click();
+  else if (type === 'call') await page.getByRole('button', { name: /^跟注/ }).click();
+  else {
+    await page.getByRole('spinbutton', { name: '金额' }).fill(String(amount));
+    await page.getByRole('button', { name: ACT[type], exact: true }).click();
+  }
+  const acc = await L.waitFor(async () => {
+    const q = await pk(u, id);
+    return q.handId !== mine.handId || q.actions.slice(n0).some((x) => x.seat === mine.you.seat && x.type === type) ? q : null;
+  }, L.WAIT_MS).catch(() => null);
+  if (!acc) throw new L.Unreportable(`${type} on page not recorded`);
+}
 
 async function tapFill(page, loc, value) { await loc.tap(); await loc.fill(value); }
 const infoOf = async (page) => {

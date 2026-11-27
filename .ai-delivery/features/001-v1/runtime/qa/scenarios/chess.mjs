@@ -529,28 +529,53 @@ const part3 = [
     id: 'TS-21',
     async fn(ctx) {
       const u1 = await L.newUser('kgR'), u2 = await L.newUser('kgB');
-      const avoid = (f, t) => 'def'.includes(f[0]) || 'def'.includes(t[0]);
-      for (let g = 0; g < 4; g++) {
+      // Black's in-between move: any legal move, preferring ones far from the e file and the red palace;
+      // never touching the red palace or e3/e4 (the king's route and its blocker).
+      const keepOff = (sq) => { const [x, y] = X.toXY(sq); return (x >= 3 && x <= 5 && y <= 2) || sq === 'e3' || sq === 'e4'; };
+      const blackMove = async (id) => {
+        const c = await chessOf(u2, id);
+        if (c.status !== 'active' || c.turn !== 'black') return false;
+        const b = X.boardFromSnapshot(c);
+        const ms = X.legalMoves(b, 'black').filter(([f, t]) => !keepOff(f) && !keepOff(t));
+        const checks = ([f, t]) => X.isAttacked(X.applyMove(b, f, t), 'red');
+        const prefs = [
+          ([f, t]) => !'def'.includes(f[0]) && !'def'.includes(t[0]) && !b.get(t) && !checks([f, t]),
+          ([f, t]) => f[0] !== 'e' && t[0] !== 'e' && !b.get(t) && !checks([f, t]),
+          ([f, t]) => !b.get(t) && !checks([f, t]),
+          ([f, t]) => !checks([f, t]),
+          () => true,
+        ];
+        for (const ok of prefs) {
+          const mv = ms.find(ok);
+          if (!mv) continue;
+          const r = await u2.move(id, mv[0], mv[1]);
+          return r.status === 200;
+        }
+        return false;
+      };
+      const flush = (buf) => { for (const a of buf) ctx.cp(...a); };
+      for (let g = 0; g < 8; g++) {
         const id = await newGame(u1, u2);
         const buf = [];
         const bctx = { cp: (...a) => buf.push(a) };
         const legal = async (f, t) => X.isLegal(X.boardFromSnapshot(await chessOf(u1, id)), 'red', f, t);
-        if (!(await legal('e3', 'e4'))) continue;
-        await expectAccept(bctx, '红方 e3→e4 被接受', u1, id, 'e3', 'e4');
-        await playFiller(u2, id, 'black', avoid);
-        if (!(await legal('e0', 'e1'))) { await u1.resign(id); continue; }
-        await expectAccept(bctx, '帅 e0→e1 被接受（九宫内）', u1, id, 'e0', 'e1');
-        await playFiller(u2, id, 'black', avoid);
-        if (!(await legal('e1', 'e2'))) { await u1.resign(id); continue; }
-        await expectAccept(bctx, '帅 e1→e2 被接受（九宫内）', u1, id, 'e1', 'e2');
-        await playFiller(u2, id, 'black', avoid);
-        const b = X.boardFromSnapshot(await chessOf(u1, id));
-        if (b.get('e3') || b.get('e2')?.piece !== 'king') { await u1.resign(id); continue; }
+        const retry = async () => { await u1.resign(id).catch(() => {}); };
+        if (!(await legal('e3', 'e4'))) { await retry(); continue; }
+        if (!(await expectAccept(bctx, '红方 e3→e4 被接受', u1, id, 'e3', 'e4'))) return flush(buf);
+        if (!(await blackMove(id)) || !(await legal('e0', 'e1'))) { await retry(); continue; }
+        if (!(await expectAccept(bctx, '帅 e0→e1 被接受（九宫内）', u1, id, 'e0', 'e1'))) return flush(buf);
+        if (!(await blackMove(id)) || !(await legal('e1', 'e2'))) { await retry(); continue; }
+        if (!(await expectAccept(bctx, '帅 e1→e2 被接受（九宫内）', u1, id, 'e1', 'e2'))) return flush(buf);
+        if (!(await blackMove(id))) { await retry(); continue; }
+        const c = await chessOf(u1, id);
+        const b = X.boardFromSnapshot(c);
+        // Only judge e2→e3 when the palace rule is the sole reason it could be rejected.
+        if (c.status !== 'active' || c.turn !== 'red' || b.get('e3') || b.get('e2')?.piece !== 'king'
+          || X.isAttacked(X.applyMove(b, 'e2', 'e3'), 'red')) { await retry(); continue; }
         await expectReject(bctx, '帅 e2→e3 被拒绝（出九宫），棋盘不变', u1, id, 'e2', 'e3');
-        for (const a of buf) ctx.cp(...a);
-        return;
+        return flush(buf);
       }
-      throw new L.Unreportable('4 局内都未能形成前置局面');
+      throw new L.Unreportable('8 局内都未能形成前置局面');
     },
   },
 ];
