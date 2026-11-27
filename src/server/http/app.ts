@@ -16,6 +16,7 @@ import { UserRepository } from '../db/users.js';
 import { AppError } from '../errors.js';
 import type { Logger } from '../logger.js';
 import { attachRealtime } from '../realtime/socket.js';
+import { createChessSettler } from '../rooms/chessSettlement.js';
 import { RoomManager } from '../rooms/roomManager.js';
 import { authRoutes } from './authRoutes.js';
 import { roomRoutes } from './roomRoutes.js';
@@ -45,6 +46,9 @@ export async function createServer(opts: CreateServerOptions): Promise<RunningSe
   await runMigrations(pool);
 
   const broadcasterRef: { current: Broadcaster } = { current: { roomChanged: () => undefined } };
+  const broadcasterProxy: Broadcaster = {
+    roomChanged: (roomId, userIds) => broadcasterRef.current.roomChanged(roomId, userIds),
+  };
   const ctx: AppContext = {
     config,
     logger,
@@ -52,8 +56,8 @@ export async function createServer(opts: CreateServerOptions): Promise<RunningSe
     pool,
     users: new UserRepository(pool),
     sessions: new SessionStore(pool),
-    rooms: new RoomManager(),
-    broadcaster: { roomChanged: (roomId, userIds) => broadcasterRef.current.roomChanged(roomId, userIds) },
+    rooms: new RoomManager({ rng, onChessFinished: createChessSettler(pool, logger, broadcasterProxy) }),
+    broadcaster: broadcasterProxy,
   };
 
   const app = express();

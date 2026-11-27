@@ -38,6 +38,13 @@ export const api = {
   createRoom: (game: GameType) => request<{ room: RoomSnapshot }>('POST', '/api/rooms', { game }),
   joinRoom: (id: string) => request<{ room: RoomSnapshot }>('POST', `/api/rooms/${encodeURIComponent(id)}/join`),
   leaveRoom: (id: string) => request<object>('POST', `/api/rooms/${encodeURIComponent(id)}/leave`),
+  chessMove: (id: string, from: string, to: string) =>
+    request<{ room: RoomSnapshot }>('POST', `/api/rooms/${encodeURIComponent(id)}/chess/move`, { from, to }),
+  chessResign: (id: string) => request<{ room: RoomSnapshot }>('POST', `/api/rooms/${encodeURIComponent(id)}/chess/resign`),
+  chessDrawOffer: (id: string) =>
+    request<{ room: RoomSnapshot }>('POST', `/api/rooms/${encodeURIComponent(id)}/chess/draw-offer`),
+  chessDrawResponse: (id: string, accept: boolean) =>
+    request<{ room: RoomSnapshot }>('POST', `/api/rooms/${encodeURIComponent(id)}/chess/draw-response`, { accept }),
   roomState: (id: string) => request<{ room: RoomSnapshot }>('GET', `/api/rooms/${encodeURIComponent(id)}/state`),
 };
 

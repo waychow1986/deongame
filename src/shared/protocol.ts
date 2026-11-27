@@ -1,6 +1,9 @@
 export type GameType = 'chess' | 'poker';
 export type RoomMode = 'online' | 'ai';
 export type ChessColor = 'red' | 'black';
+export type ChessPieceType = 'king' | 'advisor' | 'elephant' | 'horse' | 'rook' | 'cannon' | 'pawn';
+export type ChessOutcome = 'red_win' | 'black_win' | 'draw';
+export type ChessReason = 'checkmate' | 'stalemate' | 'resign' | 'draw_agreed' | 'bare_kings';
 
 export const ERROR_MESSAGES = {
   VALIDATION_FAILED: '请求参数不合法',
@@ -14,6 +17,11 @@ export const ERROR_MESSAGES = {
   ALREADY_IN_ROOM: '你已在其他房间中，请先离开当前房间',
   UNSUPPORTED_MEDIA_TYPE: '请求格式不支持',
   INTERNAL_ERROR: '服务器内部错误',
+  NOT_YOUR_TURN: '还没轮到你',
+  ILLEGAL_MOVE: '走法不合规',
+  GAME_NOT_ACTIVE: '对局未在进行中',
+  DRAW_OFFER_PENDING: '已有待回应的提和',
+  NO_DRAW_OFFER: '没有待回应的提和',
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_MESSAGES;
@@ -57,6 +65,32 @@ export interface ChessView {
   players: { red: ChessPlayerDto | null; black: ChessPlayerDto | null };
   yourColor: ChessColor | null;
   turn: ChessColor;
+  inCheck: boolean;
+  /** Occupied squares only; covered pieces are always `hidden`, for every viewer. */
+  board: ChessSquareView[];
+  captured: { side: ChessColor; piece: ChessPieceType }[];
+  lastMove: {
+    from: string;
+    to: string;
+    side: ChessColor;
+    revealed?: ChessPieceType;
+    captured?: { side: ChessColor; piece: ChessPieceType };
+  } | null;
+  drawOffer: { by: ChessColor } | null;
+  result: ChessResultView | null;
+}
+
+export interface ChessSquareView {
+  pos: string;
+  side: ChessColor;
+  piece: ChessPieceType | 'hidden';
+}
+
+export interface ChessResultView {
+  outcome: ChessOutcome;
+  reason: ChessReason;
+  settled: boolean;
+  ratingChanges: { userId: string; delta: number; rating: number }[];
 }
 
 export interface PokerSeatView {

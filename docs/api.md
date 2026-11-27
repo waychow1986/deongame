@@ -19,6 +19,11 @@
 | 409 | USERNAME_TAKEN | 用户名已被占用 |
 | 409 | ROOM_FULL | 房间已满 |
 | 409 | ALREADY_IN_ROOM | 你已在其他房间中，请先离开当前房间 |
+| 409 | NOT_YOUR_TURN | 还没轮到你 |
+| 409 | ILLEGAL_MOVE | 走法不合规 |
+| 409 | GAME_NOT_ACTIVE | 对局未在进行中 |
+| 409 | DRAW_OFFER_PENDING | 已有待回应的提和 |
+| 409 | NO_DRAW_OFFER | 没有待回应的提和 |
 | 415 | UNSUPPORTED_MEDIA_TYPE | 请求格式不支持 |
 | 500 | INTERNAL_ERROR | 服务器内部错误 |
 
@@ -50,7 +55,10 @@
 
 `RoomSnapshot`（按查看者裁剪）：`{ roomId, game, mode, version, hostUserId, members:[{userId,username}], capacity, status: "waiting"|"playing"|"closed", you:{userId}, chess?, poker? }`。
 
-- `chess`：`{ gameId, status: "waiting"|"active"|"finished", players:{red,black}, yourColor, turn }`（棋盘在后续批次加入）。
+- `chess`：`{ gameId, status: "waiting"|"active"|"finished", players:{red,black}, yourColor, turn, inCheck, board, captured, lastMove, drawOffer, result }`。
+  - `board`：只列出有棋子的位置 `[{pos, side, piece}]`，`pos` 为 `"{列}{行}"`（列 a–i，行 0–9，红方在 0–4 行）；盖着的棋子 `piece` 恒为 `"hidden"`，对任何人（包括持有者）都不暴露身份。
+  - `captured`：`[{side, piece}]`，被吃的盖棋也显示实际身份。`lastMove`：`{from, to, side, revealed?, captured?}` 或 `null`。
+  - `drawOffer`：`{by}` 或 `null`。`result`：`{outcome: "red_win"|"black_win"|"draw", reason: "checkmate"|"stalemate"|"resign"|"draw_agreed"|"bare_kings", settled, ratingChanges:[{userId, delta, rating}]}` 或 `null`（`settled=false` 表示结算写库失败、后台每 5 秒重试）。
 - `poker`：`{ handId, handNumber, stage, seats:[{seat,kind,userId?,name}] }`（牌局在后续批次加入）。
 
 ### GET /api/rooms
@@ -74,6 +82,17 @@
 - `200 {}`。房主离开时由最早加入的其余成员接任；房间无人即关闭。离开进行中的象棋对局时对局结束、房间从大厅移除，剩余玩家需“返回大厅”。
 - `403 NOT_IN_ROOM`、`404 ROOM_NOT_FOUND`。
 
+### 象棋对局（揭棋）
+
+以下接口仅对局双方可用，成功均返回 `200 { room }`（请求者视角），并向对手推送 `room:state`。通用错误：`403 NOT_IN_ROOM`、`404 ROOM_NOT_FOUND`、`409 GAME_NOT_ACTIVE`。被拒绝的操作不改变对局状态。
+
+- `POST /api/rooms/:id/chess/move`，请求 `{ "from": "a3", "to": "a4" }`：`400 VALIDATION_FAILED`、`409 NOT_YOUR_TURN`、`409 ILLEGAL_MOVE`（含走对方棋子、从空位走）。盖棋按所在开局位置的棋子走法走，走后翻开；对手走棋使其待回应的提和失效。
+- `POST /api/rooms/:id/chess/resign`：认输，对方胜。
+- `POST /api/rooms/:id/chess/draw-offer`：提和；同时只能有一个待回应的提和（`409 DRAW_OFFER_PENDING`）。
+- `POST /api/rooms/:id/chess/draw-response`，请求 `{ "accept": true|false }`：只有被提和的一方可回应（`409 NO_DRAW_OFFER`）；同意即和棋。
+
+对局结束（将死或困毙判负、认输、离开即认输、同意和棋、双方只剩将帅自动和棋）时在房间锁内写库结算：胜 +10、负 −10、和 0，每局只结算一次。结束后房间从大厅移除，成员仍留在房间内直至“返回大厅”（调用 leave）；离开已结束的对局不再计分。
+
 ### GET /api/rooms/:id/state
 
 仅房间成员可读：`200 { room }`；`403 NOT_IN_ROOM`、`404 ROOM_NOT_FOUND`。
@@ -82,7 +101,7 @@
 
 - 握手时校验 `dg_session` Cookie；未登录或会话无效时拒绝连接（`connect_error`，消息 `unauthorized`）。带 `Origin` 头时须与访问的主机一致。
 - 服务端 → 客户端：
-  - `room:state`：`RoomSnapshot`。连接建立时若用户在房间中立即推送一次；房间成员变化时推送给其他成员。
+  - `room:state`：`RoomSnapshot`。连接建立时若用户在房间中立即推送一次；房间成员变化、对局状态变化（走棋、提和、结束）时推送给其他成员。
   - `room:closed`：`{ roomId }`，房间已关闭。
 
 ## 健康检查

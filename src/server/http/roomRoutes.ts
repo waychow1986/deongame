@@ -4,16 +4,17 @@ import type { UserRow } from '../db/users.js';
 import { AppError } from '../errors.js';
 import type { AppContext } from '../context.js';
 import { viewFor } from '../rooms/view.js';
+import { chessRoutes } from './chessRoutes.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function roomIdParam(req: Request): string {
+export function roomIdParam(req: Request): string {
   const id = req.params.id;
   if (typeof id !== 'string' || !UUID_RE.test(id)) throw new AppError('ROOM_NOT_FOUND');
   return id.toLowerCase();
 }
 
-function member(req: Request): { userId: string; username: string } {
+export function member(req: Request): { userId: string; username: string } {
   const user = req.user as UserRow;
   return { userId: user.id, username: user.username };
 }
@@ -61,6 +62,9 @@ export function roomRoutes(ctx: AppContext): Router {
     if (!room.members.some((m) => m.userId === me.userId)) throw new AppError('NOT_IN_ROOM');
     res.json({ room: viewFor(room, me.userId) });
   });
+
+  // Mounted after requireAuth so the chess endpoints share the same authentication.
+  router.use(chessRoutes(ctx));
 
   return router;
 }
