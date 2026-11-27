@@ -105,16 +105,18 @@ async function uiMove(page, api, roomId, f, t) {
   await cell(page, t).click();
   return waitFor(async () => (await api.state(roomId)).version !== v0, { timeout: 10000 });
 }
-async function apiMovePref(api, roomId, prefer, avoid, { capture = false, page = null } = {}) {
+async function apiMovePref(api, roomId, prefer, avoid, { capture = false, page = null, soft = [] } = {}) {
   const st = await api.state(roomId);
   const lm = st.chess?.legalMoves || {};
-  const opts = [];
+  let opts = [];
   for (const [f, tos] of Object.entries(lm)) for (const t of tos) {
     if (avoid.includes(t)) continue;
     const occ = occupied(st, t);
     if (!capture && occ) continue;
     opts.push([f, t, occ]);
   }
+  // soft-avoided destinations are only used when nothing else is available
+  if (soft.length && opts.some((o) => !soft.includes(o[1]))) opts = opts.filter((o) => !soft.includes(o[1]));
   let pick = null;
   if (capture) pick = opts.find((o) => o[2]);
   for (const p of prefer) { if (pick) break; pick = opts.find((o) => o[0] === p); }
@@ -256,20 +258,43 @@ export const scenarios = [
       ctx.check('5 木纹底色：方格内 20 像素平均为暖色木色（R>G>B）且不是同一颜色', avg.r > avg.g && avg.g > avg.b && uniq > 1, `avg=(${avg.r.toFixed(0)},${avg.g.toFixed(0)},${avg.b.toFixed(0)}) 不同颜色数=${uniq}`);
       await u.leave(room.id);
 
-      // CP4 position marks on online game
-      const { u1, u2, roomId } = await onlineChess();
-      ctx.track(u1); ctx.track(u2);
-      const p1 = await openRoom(ctx, u1, roomId);
-      const redT = ['b2', 'h2', 'e3', 'a3']; const blkT = ['b7', 'h7', 'e6', 'a6'];
-      for (let i = 0; i < 8; i++) {
-        const mover = i % 2 === 0 ? u1 : u2;
-        const pref = (i % 2 === 0 ? redT : blkT);
-        const st = await mover.state(roomId);
-        const remaining = pref.filter((p) => occupied(st, p));
-        const mv = await apiMovePref(mover, roomId, remaining, MARK_POS, { page: mover === u1 ? p1 : null });
-        ctx.log(`move ${i}: ${mv}`);
-        if (!mv) break;
-        if (!(await pageMatchesApi(p1, u1, roomId, 60000))) ctx.notReported('棋盘 1 分钟内未回到 idle');
+      // CP4 position marks on online game: each side must vacate both cannon points, one middle
+      // pawn point (c/e/g) and one edge pawn point (a/i). Keep moving until that is achieved.
+      const SIDE = {
+        red: { cannon: ['b2', 'h2'], mid: ['e3', 'c3', 'g3'], edge: ['a3', 'i3'], fwd: ['a4', 'i4'] },
+        black: { cannon: ['b7', 'h7'], mid: ['e6', 'c6', 'g6'], edge: ['a6', 'i6'], fwd: ['a5', 'i5'] },
+      };
+      const sideNeeds = (st, s) => {
+        const S = SIDE[s]; const emp = (p) => !occupied(st, p);
+        const out = S.cannon.filter((p) => !emp(p));
+        if (!S.mid.some(emp)) out.push(...S.mid);
+        if (!S.edge.some(emp)) out.push(...S.edge);
+        return out;
+      };
+      let u1; let u2; let roomId; let p1 = null; let done = false;
+      for (let game = 0; game < 3 && !done; game++) {
+        if (p1) { await p1.close().catch(() => {}); await u1.leave(roomId).catch(() => {}); }
+        ({ u1, u2, roomId } = await onlineChess());
+        ctx.track(u1); ctx.track(u2);
+        p1 = await openRoom(ctx, u1, roomId);
+        for (let i = 0; i < 30; i++) {
+          const st = await u1.state(roomId);
+          if (st.chess?.status !== 'active') { ctx.log(`game ${game} ended: ${st.chess?.status}`); break; }
+          const side = st.chess.turn;
+          const otherSide = side === 'red' ? 'black' : 'red';
+          if (!sideNeeds(st, 'red').length && !sideNeeds(st, 'black').length) { done = true; break; }
+          const mover = side === 'red' ? u1 : u2;
+          // do not block the opponent's edge pawns' forward step
+          const soft = SIDE[otherSide].fwd;
+          let mv = null;
+          for (let k = 0; k < 3 && !mv; k++) {
+            mv = await apiMovePref(mover, roomId, sideNeeds(st, side), MARK_POS, { page: mover === u1 ? p1 : null, soft });
+            if (!mv) await sleep(1000);
+          }
+          ctx.log(`game ${game} move ${i} ${side}: ${mv}`);
+          if (!mv) break;
+          if (!(await pageMatchesApi(p1, u1, roomId, 60000))) ctx.notReported('棋盘 1 分钟内未回到 idle');
+        }
       }
       const st = await u1.state(roomId);
       const empties = MARK_POS.filter((p) => !occupied(st, p));
