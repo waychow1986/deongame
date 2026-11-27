@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 3,
+  "dependencies": [
+    {
+      "name": "postgres",
+      "kind": "postgresql",
+      "purpose": "长期保留的用户数据：账号（用户名、密码散列）、象棋积分、扑克筹码余额、登录会话，以及保证积分/筹码每局只结算一次的结算记录（spec FR-001、FR-033、FR-064、FR-091）。房间与对局过程只在内存中，不写入数据库。",
+      "recommendation": {
+        "form": "container",
+        "reason": "开源 PostgreSQL 16，平台以容器运行即可满足；项目没有系统现状与客户偏好记录，按宪章“最简单架构”选容器。dev 与 test 各新建一个实例，不需要云资源。需要时可改为客户提供的 PostgreSQL 13 及以上实例（填写同样的接入字段，SSLMODE 按实例要求填写）。"
+      },
+      "realInstance": { "dev": true, "test": true },
+      "access": {
+        "fields": [
+          { "name": "ADDRESS", "purpose": "数据库地址，主机名:端口", "target": true, "example": "postgres.example.internal:5432" },
+          { "name": "DATABASE", "purpose": "数据库名", "example": "deongame" },
+          { "name": "USER", "purpose": "数据库登录用户名（应用以它建表与读写）", "example": "deongame" },
+          { "name": "PASSWORD", "purpose": "数据库登录密码", "secret": true },
+          { "name": "SSLMODE", "purpose": "连接是否使用 TLS，按 libpq 语义取 disable、require 或 verify-full（平台容器实例为 disable）", "example": "disable" }
+        ]
+      },
+      "probe": { "path": "deploy/probes/postgres.sh" },
+      "container": {
+        "image": "docker.io/library/postgres:16",
+        "ports": [ { "name": "pg", "port": 5432 } ],
+        "health": { "port": "pg" },
+        "env": {
+          "POSTGRES_USER": "deongame",
+          "POSTGRES_DB": "deongame",
+          "POSTGRES_PASSWORD": "{{secret.DB_PASSWORD}}",
+          "PGDATA": "/var/lib/postgresql/data/pgdata"
+        },
+        "generatedSecrets": [ "DB_PASSWORD" ],
+        "storage": { "path": "/var/lib/postgresql/data", "sizeGi": 2 },
+        "runAs": { "user": 999, "group": 999 },
+        "connection": {
+          "ADDRESS": "{{host}}:{{port.pg}}",
+          "DATABASE": "deongame",
+          "USER": "deongame",
+          "PASSWORD": "{{secret.DB_PASSWORD}}",
+          "SSLMODE": "disable"
+        }
+      },
+      "sharing": {
+        "description": "与其他项目共用同一实例时，为本项目单独建一个数据库（或 schema）与只拥有它的登录用户，DATABASE/USER/PASSWORD 填这个库与用户；本应用只在自己的库内建表（启动时自动迁移）。集成测试在该库内每个测试进程使用自己的 schema（test_<运行编号>_<进程号>），结束时删除，与应用的 public schema 互不干扰。"
+      }
+    }
+  ],
+  "secrets": []
+}
