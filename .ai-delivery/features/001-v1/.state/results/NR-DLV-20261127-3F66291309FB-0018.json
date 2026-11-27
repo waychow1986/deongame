@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "stepId": "S24",
+  "result": "done",
+  "summary": "按 S25 审查意见在 tests/integration/chess.test.ts 补了两个经走棋接口结束对局的集成用例（只剩将帅自动和棋：结果为和棋、原因 bare_kings、已结算、双方仍 1000 分、结算表一行、对手收到结束推送、房间从大厅消失；将死：红胜 +10、黑 −10，同样核对结算、推送与大厅），复现测试在临时删去 roomManager.ts 第 207 行结束结算逻辑时运行一次 2 项失败（约 2 秒），恢复后通过；生产代码未改动；lint、typecheck、build 通过，全量单元测试 53 项通过（约 1 秒），全量集成测试 29 项通过（真实 PostgreSQL，约 2 秒）；本次未新写或改动端到端用例，既有端到端用例未运行，由 G3 独立测试验证。",
+  "asks": [],
+  "outputs": [
+    "tests/integration/chess.test.ts"
+  ]
+}

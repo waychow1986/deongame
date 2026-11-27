@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { ChessGameState } from '../../src/server/rooms/roomManager.js';
 import type { ChessView, RoomSnapshot, UserDto } from '../../src/shared/protocol.js';
 import { Client, startTestServer, uniqueName, waitForEvent, type TestServer } from '../support/server.js';
 
@@ -122,6 +123,65 @@ describe('online chess (AC-6, AC-7, AC-8, AC-9, AC-10)', () => {
     } finally {
       sock.close();
       await red.post(`/api/rooms/${roomId}/leave`);
+    }
+  });
+
+  it('a move leaving only the two kings ends the game as a draw through the move API (DC-06)', async () => {
+    const { red, black, roomId, base } = await game();
+    const chess = ts.server.ctx.rooms.get(roomId)?.chess as ChessGameState;
+    chess.board = {
+      d0: { side: 'red', type: 'king', revealed: true },
+      f9: { side: 'black', type: 'king', revealed: true },
+      d1: { side: 'black', type: 'pawn', revealed: true },
+    };
+    const sock = black.socket();
+    try {
+      await waitForEvent(sock, 'room:state');
+      const pushed = waitForEvent<RoomSnapshot>(sock, 'room:state', (s) => s.chess?.status === 'finished');
+      const res = await red.post<RoomBody>(`${base}/move`, { from: 'd0', to: 'd1' });
+      expect(res.status).toBe(200);
+      const expected = { outcome: 'draw', reason: 'bare_kings', settled: true };
+      expect(res.body.room.chess?.result).toMatchObject(expected);
+      expect((await pushed).chess?.result).toMatchObject(expected);
+      expect((await me(red)).rating).toBe(1000);
+      expect((await me(black)).rating).toBe(1000);
+      expect(await chessResults(res.body.room.chess?.gameId as string)).toBe(1);
+      const lobby = await red.get<{ rooms: { id: string }[] }>('/api/rooms');
+      expect(lobby.body.rooms.some((r) => r.id === roomId)).toBe(false);
+    } finally {
+      sock.close();
+      await red.post(`/api/rooms/${roomId}/leave`);
+      await black.post(`/api/rooms/${roomId}/leave`);
+    }
+  });
+
+  it('a checkmating move ends the game through the move API: winner +10, loser −10 (DC-05)', async () => {
+    const { red, black, roomId, base } = await game();
+    const chess = ts.server.ctx.rooms.get(roomId)?.chess as ChessGameState;
+    chess.board = {
+      d0: { side: 'red', type: 'king', revealed: true },
+      a8: { side: 'red', type: 'rook', revealed: true },
+      b0: { side: 'red', type: 'rook', revealed: true },
+      e9: { side: 'black', type: 'king', revealed: true },
+    };
+    const sock = black.socket();
+    try {
+      await waitForEvent(sock, 'room:state');
+      const pushed = waitForEvent<RoomSnapshot>(sock, 'room:state', (s) => s.chess?.status === 'finished');
+      const res = await red.post<RoomBody>(`${base}/move`, { from: 'b0', to: 'b9' });
+      expect(res.status).toBe(200);
+      const expected = { outcome: 'red_win', reason: 'checkmate', settled: true };
+      expect(res.body.room.chess?.result).toMatchObject(expected);
+      expect((await pushed).chess?.result).toMatchObject(expected);
+      expect((await me(red)).rating).toBe(1010);
+      expect((await me(black)).rating).toBe(990);
+      expect(await chessResults(res.body.room.chess?.gameId as string)).toBe(1);
+      const lobby = await red.get<{ rooms: { id: string }[] }>('/api/rooms');
+      expect(lobby.body.rooms.some((r) => r.id === roomId)).toBe(false);
+    } finally {
+      sock.close();
+      await red.post(`/api/rooms/${roomId}/leave`);
+      await black.post(`/api/rooms/${roomId}/leave`);
     }
   });
 
