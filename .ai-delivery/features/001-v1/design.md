@@ -273,6 +273,7 @@ web 服务（Node 22，单进程，端口 8080）
   "captured": [ {"side": "black", "piece": "horse"} ],
   "lastMove": { "from": "b2", "to": "b9", "side": "red", "revealed": "rook", "captured": {"side": "black", "piece": "horse"} },
   "drawOffer": { "by": "red" },
+  "drawDeclined": null,
   "result": {
     "outcome": "red_win | black_win | draw",
     "reason": "checkmate | stalemate | resign | draw_agreed | bare_kings",
@@ -282,7 +283,7 @@ web 服务（Node 22，单进程，端口 8080）
 }
 ```
 
-- `board` 只列出有棋子的位置；盖棋 `piece` 恒为 `"hidden"`，快照中没有任何字段携带盖棋实际身份（FR-023）。`lastMove.revealed` 为本步被翻开的身份（本步移动的是盖棋时），`captured.piece` 为被吃棋子实际身份（含被吃的盖棋，FR-029）。`drawOffer`、`result` 不存在时为 `null`。
+- `board` 只列出有棋子的位置；盖棋 `piece` 恒为 `"hidden"`，快照中没有任何字段携带盖棋实际身份（FR-023）。`lastMove.revealed` 为本步被翻开的身份（本步移动的是盖棋时），`captured.piece` 为被吃棋子实际身份（含被吃的盖棋，FR-029）。`drawOffer`、`result` 不存在时为 `null`。`drawDeclined` 为刚被拒绝的提和（`by` 为提和方），在下一步走棋或新的提和时清除，提和方据此显示“对方拒绝了提和”，刷新后仍可见（FR-036）。
 
 扑克部分 `poker`：
 

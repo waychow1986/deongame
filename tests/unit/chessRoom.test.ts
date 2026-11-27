@@ -88,6 +88,24 @@ describe('chess room actions', () => {
     expect(await rejection(rm.chessDrawResponse('b', room.id, true))).toBe('NO_DRAW_OFFER');
   });
 
+  it('a declined offer is kept in the room state so the offerer sees it after a reload (FR-036)', async () => {
+    const { rm, room } = await activeGame();
+    await rm.chessDrawOffer('a', room.id);
+    await rm.chessDrawResponse('b', room.id, false);
+    // A fresh snapshot (page reload) still tells the offerer that red's offer was declined.
+    expect(viewFor(room, 'a').chess?.drawDeclined).toEqual({ by: 'red' });
+    expect(viewFor(room, 'b').chess?.drawDeclined).toEqual({ by: 'red' });
+    expect(viewFor(room, 'a').chess).toMatchObject({ status: 'active', drawOffer: null, turn: 'red' });
+    // The notice ends with the next move or a new offer.
+    await rm.chessMove('a', room.id, 'a3', 'a4');
+    expect(viewFor(room, 'a').chess?.drawDeclined).toBeNull();
+    await rm.chessDrawOffer('b', room.id);
+    await rm.chessDrawResponse('a', room.id, false);
+    expect(viewFor(room, 'b').chess?.drawDeclined).toEqual({ by: 'black' });
+    await rm.chessDrawOffer('b', room.id);
+    expect(viewFor(room, 'b').chess?.drawDeclined).toBeNull();
+  });
+
   it('a pending offer expires when the opponent moves; accepting ends in a draw', async () => {
     const { rm, room } = await activeGame();
     await rm.chessMove('a', room.id, 'a3', 'a4');

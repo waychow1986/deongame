@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import type { ChessReason, ChessView, RoomSnapshot } from '../../shared/protocol.js';
 import { api, errorMessage } from '../api.js';
@@ -11,24 +11,6 @@ export function RoomPage() {
   const navigate = useNavigate();
   const [room, setRoom] = useState<RoomSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [drawDeclined, setDrawDeclined] = useState(false);
-  const prevChess = useRef<ChessView | null>(null);
-
-  useEffect(() => {
-    const prev = prevChess.current;
-    const next = room?.chess ?? null;
-    if (prev && next && prev.gameId === next.gameId) {
-      const sameMove = JSON.stringify(prev.lastMove) === JSON.stringify(next.lastMove);
-      // Our offer disappeared without a move and the game goes on: the opponent declined it.
-      if (prev.drawOffer?.by === next.yourColor && !next.drawOffer && next.status === 'active' && sameMove) {
-        setDrawDeclined(true);
-      } else if (!sameMove || next.drawOffer || next.status !== 'active') {
-        setDrawDeclined(false);
-      }
-    }
-    prevChess.current = next;
-  }, [room]);
-
   useEffect(() => {
     let cancelled = false;
     api
@@ -112,7 +94,6 @@ export function RoomPage() {
           {room.chess && (
             <ChessPanel
               chess={room.chess}
-              drawDeclined={drawDeclined}
               onMove={(from, to) => void act(() => api.chessMove(id, from, to))}
               onResign={() => void act(() => api.chessResign(id))}
               onOfferDraw={() => void act(() => api.chessDrawOffer(id))}
@@ -155,7 +136,6 @@ const REASONS: Record<ChessReason, string> = {
 interface ChessPanelProps {
   chess: ChessView;
   youId: string;
-  drawDeclined: boolean;
   onMove: (from: string, to: string) => void;
   onResign: () => void;
   onOfferDraw: () => void;
@@ -169,7 +149,7 @@ function ChessPanel(props: ChessPanelProps) {
   const offerToMe = playing && chess.drawOffer !== null && chess.drawOffer.by !== chess.yourColor;
   return (
     <>
-      <ChessStatus chess={chess} drawDeclined={props.drawDeclined} />
+      <ChessStatus chess={chess} />
       {chess.status !== 'waiting' && <ChessBoard chess={chess} onMove={props.onMove} />}
       <section aria-label="被吃的棋子" className="card">
         <h2 className="sub">被吃的棋子</h2>
@@ -236,7 +216,7 @@ function ChessResult({ chess, youId, onBack }: { chess: ChessView; youId: string
   );
 }
 
-function ChessStatus({ chess, drawDeclined }: { chess: ChessView; drawDeclined: boolean }) {
+function ChessStatus({ chess }: { chess: ChessView }) {
   const parts: string[] = [];
   if (chess.yourColor) parts.push(chess.yourColor === 'red' ? '你执红' : '你执黑');
   if (chess.status === 'waiting') parts.push('等待对手加入');
@@ -244,7 +224,8 @@ function ChessStatus({ chess, drawDeclined }: { chess: ChessView; drawDeclined: 
     parts.push(chess.turn === chess.yourColor ? '轮到你走棋' : chess.turn === 'red' ? '轮到红方' : '轮到黑方');
     if (chess.inCheck) parts.push('将军');
     if (chess.drawOffer) parts.push(chess.drawOffer.by === chess.yourColor ? '已提和，等待对方回应' : '对方提和');
-    if (drawDeclined) parts.push('对方拒绝了提和');
+    // Kept in the server state, so it also shows after a reload (FR-036).
+    if (chess.drawDeclined?.by === chess.yourColor) parts.push('对方拒绝了提和');
   } else parts.push('对局已结束');
   return (
     <div role="status" aria-label="对局状态" className="card">

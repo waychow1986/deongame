@@ -185,6 +185,27 @@ describe('online chess (AC-6, AC-7, AC-8, AC-9, AC-10)', () => {
     }
   });
 
+  it('a declined draw offer reaches the offerer by push and after a reload (FR-036)', async () => {
+    const { red, black, roomId, base } = await game();
+    const sock = red.socket();
+    try {
+      await waitForEvent(sock, 'room:state');
+      expect((await red.post(`${base}/draw-offer`)).status).toBe(200);
+      const pushed = waitForEvent<RoomSnapshot>(sock, 'room:state', (s) => s.chess?.drawDeclined?.by === 'red');
+      expect((await black.post(`${base}/draw-response`, { accept: false })).status).toBe(200);
+      expect((await pushed).chess).toMatchObject({ status: 'active', drawOffer: null, turn: 'red' });
+      // Reloading the page fetches a fresh snapshot, which still carries the declined notice.
+      const reloaded = await red.get<RoomBody>(`/api/rooms/${roomId}/state`);
+      expect(reloaded.body.room.chess).toMatchObject({ status: 'active', drawOffer: null, drawDeclined: { by: 'red' } });
+      const moved = await red.post<RoomBody>(`${base}/move`, { from: 'a3', to: 'a4' });
+      expect(moved.body.room.chess?.drawDeclined).toBeNull();
+    } finally {
+      sock.close();
+      await red.post(`/api/rooms/${roomId}/leave`);
+      await black.post(`/api/rooms/${roomId}/leave`);
+    }
+  });
+
   it('draw offer: decline and expiry keep the game going; accepting draws with ratings unchanged', async () => {
     const { red, black, roomId, base } = await game();
     const sock = black.socket();

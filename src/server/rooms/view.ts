@@ -51,6 +51,7 @@ export function viewFor(room: Room, viewerUserId: string): RoomSnapshot {
           }
         : null,
       drawOffer: c.drawOffer ? { by: c.drawOffer.by } : null,
+      drawDeclined: c.drawDeclined ? { by: c.drawDeclined.by } : null,
       result: c.result
         ? {
             outcome: c.result.outcome,

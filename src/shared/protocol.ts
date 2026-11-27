@@ -80,6 +80,8 @@ export interface ChessView {
     captured?: { side: ChessColor; piece: ChessPieceType };
   } | null;
   drawOffer: { by: ChessColor } | null;
+  /** Whose draw offer was just declined; cleared by the next move or offer (FR-036). */
+  drawDeclined: { by: ChessColor } | null;
   result: ChessResultView | null;
 }
 

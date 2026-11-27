@@ -30,6 +30,8 @@ export interface ChessGameState {
   captured: NonNullable<MoveRecord['captured']>[];
   lastMove: MoveRecord | null;
   drawOffer: { by: ChessColor } | null;
+  /** The last draw offer was declined; kept until the next move or offer so the offerer sees it (FR-036). */
+  drawDeclined: { by: ChessColor } | null;
   result: ChessResultState | null;
 }
 
@@ -193,6 +195,7 @@ export class RoomManager {
           captured: [],
           lastMove: null,
           drawOffer: null,
+          drawDeclined: null,
           result: null,
         };
       } else {
@@ -243,6 +246,7 @@ export class RoomManager {
           captured: [],
           lastMove: null,
           drawOffer: null,
+          drawDeclined: null,
           result: null,
         },
       };
@@ -315,6 +319,7 @@ export class RoomManager {
       chess.lastMove = res.move;
       if (res.move.captured) chess.captured.push(res.move.captured);
       if (chess.drawOffer && chess.drawOffer.by !== color) chess.drawOffer = null;
+      chess.drawDeclined = null;
       chess.turn = color === 'red' ? 'black' : 'red';
       if (res.end) await this.finishChess(room, res.end.outcome, res.end.reason);
       else {
@@ -333,6 +338,7 @@ export class RoomManager {
   chessDrawOffer(userId: string, roomId: string): Promise<Room> {
     return this.withChess(userId, roomId, (room, chess, color) => {
       if (chess.drawOffer) throw new AppError('DRAW_OFFER_PENDING');
+      chess.drawDeclined = null;
       // The computer opponent always accepts a draw (FR-064).
       if (room.mode === 'ai') return this.finishChess(room, 'draw', 'draw_agreed');
       chess.drawOffer = { by: color };
@@ -346,6 +352,7 @@ export class RoomManager {
       if (accept) {
         await this.finishChess(room, 'draw', 'draw_agreed');
       } else {
+        chess.drawDeclined = { by: chess.drawOffer.by };
         chess.drawOffer = null;
         room.version += 1;
       }
@@ -555,6 +562,7 @@ export class RoomManager {
     const chess = room.chess as ChessGameState;
     chess.status = 'finished';
     chess.drawOffer = null;
+    chess.drawDeclined = null;
     chess.result = { outcome, reason, settled: false, ratingChanges: [] };
     room.closed = true;
     if (this.onChessFinished) await this.onChessFinished(room);
