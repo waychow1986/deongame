@@ -2,6 +2,15 @@ import { randomUUID } from 'node:crypto';
 import { CHESS_CAPACITY, POKER_CAPACITY } from '../../shared/constants.js';
 import type { ChessColor, ChessOutcome, ChessReason, GameType, RoomListItem, RoomMode } from '../../shared/protocol.js';
 import { cryptoRng, type Rng } from '../../shared/rng.js';
+import {
+  applyAction,
+  forceFold,
+  isHandOver,
+  netResults,
+  startHand,
+  type HandState,
+  type PlayerAction,
+} from '../../shared/poker/index.js';
 import { applyMove, createBoard, type Board, type MoveRecord } from '../../shared/xiangqi/index.js';
 import { AppError } from '../errors.js';
 import { AsyncMutex } from './mutex.js';
@@ -34,17 +43,35 @@ export interface RoomManagerOptions {
   rng?: Rng;
   /** Called inside the room lock right after a chess game ends; persists the result (TD-010, TD-018). */
   onChessFinished?: (room: Room) => Promise<void>;
+  /** Current chip balances of the given users (default: 1000 each). */
+  loadChips?: (userIds: string[]) => Promise<Map<string, number>>;
+  /** Called inside the room lock to persist net chip changes of one hand (TD-011). */
+  onPokerSettled?: (room: Room, handId: string, deltas: { userId: string; delta: number }[]) => Promise<void>;
+  /** Called after the server changed a poker room on its own (automatic next hand). */
+  onPokerUpdate?: (room: Room) => void;
+  pokerNextHandDelayMs?: number;
 }
 
 export interface PokerSeat {
   kind: 'human' | 'bot';
   userId?: string;
   name: string;
+  /** Joined while a hand was running; takes part from the next hand (FR-054). */
+  waitingNextHand?: boolean;
 }
 
 export interface PokerTableState {
   seats: (PokerSeat | null)[];
   handNumber: number;
+  dealerSeat: number | null;
+  hand: HandState | null;
+  /** Who sat in each seat when the current hand started. */
+  handPlayers: Record<number, PokerSeat>;
+  /** Last known chip balance per human user (already including settled hands). */
+  balances: Record<string, number>;
+  /** Users whose result for the current hand is already settled (left mid-hand or hand over). */
+  settledUserIds: string[];
+  nextHandPending: boolean;
 }
 
 export interface Room {
@@ -72,10 +99,18 @@ export class RoomManager {
   private readonly globalLock = new AsyncMutex();
   private readonly rng: Rng;
   private readonly onChessFinished?: (room: Room) => Promise<void>;
+  private readonly loadChips: (userIds: string[]) => Promise<Map<string, number>>;
+  private readonly onPokerSettled?: RoomManagerOptions['onPokerSettled'];
+  private readonly onPokerUpdate?: (room: Room) => void;
+  private readonly pokerNextHandDelayMs: number;
 
   constructor(opts: RoomManagerOptions = {}) {
     this.rng = opts.rng ?? cryptoRng;
     this.onChessFinished = opts.onChessFinished;
+    this.loadChips = opts.loadChips ?? (async (ids) => new Map(ids.map((id) => [id, POKER_DEFAULT_CHIPS])));
+    this.onPokerSettled = opts.onPokerSettled;
+    this.onPokerUpdate = opts.onPokerUpdate;
+    this.pokerNextHandDelayMs = opts.pokerNextHandDelayMs ?? 4000;
   }
 
   get(roomId: string): Room | undefined {
@@ -106,7 +141,7 @@ export class RoomManager {
   }
 
   create(user: Member, game: GameType): Promise<Room> {
-    return this.globalLock.run(() => {
+    return this.globalLock.run(async () => {
       if (this.userRoom.has(user.userId)) throw new AppError('ALREADY_IN_ROOM');
       const room: Room = {
         id: randomUUID(),
@@ -136,7 +171,17 @@ export class RoomManager {
       } else {
         const seats: (PokerSeat | null)[] = Array.from({ length: POKER_CAPACITY }, () => null);
         seats[0] = { kind: 'human', userId: user.userId, name: user.username };
-        room.poker = { seats, handNumber: 0 };
+        room.poker = {
+          seats,
+          handNumber: 0,
+          dealerSeat: null,
+          hand: null,
+          handPlayers: {},
+          balances: {},
+          settledUserIds: [],
+          nextHandPending: false,
+        };
+        await this.refreshBalances(room.poker, [user.userId]);
       }
       this.rooms.set(room.id, room);
       this.userRoom.set(user.userId, room.id);
@@ -146,14 +191,15 @@ export class RoomManager {
 
   join(user: Member, roomId: string): Promise<Room> {
     return this.globalLock.run(() =>
-      this.withRoom(roomId, (room) => {
+      this.withRoom(roomId, async (room) => {
         if (room.members.some((m) => m.userId === user.userId)) return room;
         if (this.userRoom.has(user.userId)) throw new AppError('ALREADY_IN_ROOM');
         if (room.closed || !room.listed) throw new AppError('ROOM_NOT_FOUND');
         if (occupiedCount(room) >= room.capacity) throw new AppError('ROOM_FULL');
         if (room.chess && room.chess.status !== 'waiting') throw new AppError('ROOM_FULL');
-        const freeSeat = room.poker ? room.poker.seats.findIndex((s) => s === null) : -1;
+        const freeSeat = room.poker ? pickFreeSeat(room.poker) : -1;
         if (room.poker && freeSeat < 0) throw new AppError('ROOM_FULL');
+        if (room.poker) await this.refreshBalances(room.poker, [user.userId]);
         room.members.push({ ...user });
         this.userRoom.set(user.userId, room.id);
         if (room.chess) {
@@ -162,7 +208,12 @@ export class RoomManager {
           room.chess.turn = 'red';
         }
         if (room.poker) {
-          room.poker.seats[freeSeat] = { kind: 'human', userId: user.userId, name: user.username };
+          room.poker.seats[freeSeat] = {
+            kind: 'human',
+            userId: user.userId,
+            name: user.username,
+            ...(handActive(room.poker) ? { waitingNextHand: true } : {}),
+          };
         }
         room.version += 1;
         return room;
@@ -180,9 +231,7 @@ export class RoomManager {
         room.members = room.members.filter((m) => m.userId !== userId);
         if (this.userRoom.get(userId) === room.id) this.userRoom.delete(userId);
         if (leaverColor) await this.finishChess(room, leaverColor === 'red' ? 'black_win' : 'red_win', 'resign');
-        if (room.poker) {
-          room.poker.seats = room.poker.seats.map((s) => (s?.kind === 'human' && s.userId === userId ? null : s));
-        }
+        if (room.poker) await this.pokerLeave(room, userId);
         if (room.hostUserId === userId && room.members[0]) room.hostUserId = room.members[0].userId;
         if (room.members.length === 0) {
           room.closed = true;
@@ -235,6 +284,112 @@ export class RoomManager {
     });
   }
 
+  pokerStart(userId: string, roomId: string): Promise<Room> {
+    return this.withRoom(roomId, async (room) => {
+      const poker = requirePokerMember(room, userId);
+      if (room.hostUserId !== userId) throw new AppError('NOT_HOST');
+      if (handActive(poker) || poker.nextHandPending) throw new AppError('HAND_IN_PROGRESS');
+      if (seatedIndexes(poker).length < 2) throw new AppError('NOT_ENOUGH_PLAYERS');
+      const hostSeat = poker.seats.findIndex((s) => s?.kind === 'human' && s.userId === room.hostUserId);
+      await this.startPokerHand(room, poker.dealerSeat === null ? hostSeat : null);
+      return room;
+    });
+  }
+
+  pokerAction(userId: string, roomId: string, action: PlayerAction): Promise<Room> {
+    return this.withRoom(roomId, async (room) => {
+      const poker = requirePokerMember(room, userId);
+      const hand = poker.hand;
+      if (!hand || isHandOver(hand)) throw new AppError('GAME_NOT_ACTIVE');
+      const seat = handSeatOf(poker, userId);
+      if (seat === null) throw new AppError('NOT_YOUR_TURN');
+      const res = applyAction(hand, seat, action);
+      if (!res.ok) throw res.code === 'NOT_YOUR_TURN' ? new AppError('NOT_YOUR_TURN') : new AppError(res.code, res.message);
+      if (isHandOver(hand)) await this.finishPokerHand(room);
+      room.version += 1;
+      return room;
+    });
+  }
+
+  private async pokerLeave(room: Room, userId: string): Promise<void> {
+    const poker = room.poker as PokerTableState;
+    const seatIdx = poker.seats.findIndex((s) => s?.kind === 'human' && s.userId === userId);
+    if (seatIdx >= 0) poker.seats[seatIdx] = null;
+    const hand = poker.hand;
+    const handSeat = hand && !isHandOver(hand) ? handSeatOf(poker, userId, seatIdx) : null;
+    if (hand && handSeat !== null) {
+      // Leaving mid-hand folds the player and settles what they already put in (FR-093).
+      forceFold(hand, handSeat);
+      const committed = hand.players.find((p) => p.seat === handSeat)?.committed ?? 0;
+      await this.settlePoker(room, hand.id, [{ userId, delta: -committed }]);
+      if (isHandOver(hand)) await this.finishPokerHand(room);
+    }
+  }
+
+  private async startPokerHand(room: Room, dealerSeat: number | null): Promise<void> {
+    const poker = room.poker as PokerTableState;
+    const seats = seatedIndexes(poker);
+    const dealer = dealerSeat ?? nextSeatAfter(seats, poker.dealerSeat ?? -1);
+    await this.refreshBalances(
+      poker,
+      seats.flatMap((i) => (poker.seats[i]?.kind === 'human' ? [poker.seats[i]?.userId as string] : [])),
+    );
+    poker.handPlayers = {};
+    for (const i of seats) {
+      const s = poker.seats[i] as PokerSeat;
+      delete s.waitingNextHand;
+      poker.handPlayers[i] = { ...s };
+    }
+    poker.settledUserIds = [];
+    poker.dealerSeat = dealer;
+    poker.handNumber += 1;
+    poker.hand = startHand({ id: randomUUID(), seats, dealerSeat: dealer, rng: this.rng });
+  }
+
+  /** Settles everybody not yet settled, then schedules the next hand (FR-060, FR-066). */
+  private async finishPokerHand(room: Room): Promise<void> {
+    const poker = room.poker as PokerTableState;
+    const hand = poker.hand as HandState;
+    const deltas = netResults(hand).flatMap(({ seat, net }) => {
+      const p = poker.handPlayers[seat];
+      if (p?.kind !== 'human' || !p.userId || poker.settledUserIds.includes(p.userId)) return [];
+      return [{ userId: p.userId, delta: net }];
+    });
+    await this.settlePoker(room, hand.id, deltas);
+    this.scheduleNextHand(room, hand.id);
+  }
+
+  private async settlePoker(room: Room, handId: string, deltas: { userId: string; delta: number }[]): Promise<void> {
+    const poker = room.poker as PokerTableState;
+    for (const d of deltas) {
+      poker.settledUserIds.push(d.userId);
+      poker.balances[d.userId] = (poker.balances[d.userId] ?? POKER_DEFAULT_CHIPS) + d.delta;
+    }
+    if (deltas.length > 0 && this.onPokerSettled) await this.onPokerSettled(room, handId, deltas);
+  }
+
+  private scheduleNextHand(room: Room, handId: string): void {
+    const poker = room.poker as PokerTableState;
+    poker.nextHandPending = true;
+    const timer = setTimeout(() => {
+      void room.lock.run(async () => {
+        if (poker.hand?.id !== handId || !poker.nextHandPending) return;
+        poker.nextHandPending = false;
+        if (room.closed || seatedIndexes(poker).length < 2) return;
+        await this.startPokerHand(room, null);
+        room.version += 1;
+        this.onPokerUpdate?.(room);
+      });
+    }, this.pokerNextHandDelayMs);
+    timer.unref();
+  }
+
+  private async refreshBalances(poker: PokerTableState, userIds: string[]): Promise<void> {
+    if (userIds.length === 0) return;
+    const chips = await this.loadChips(userIds);
+    for (const id of userIds) poker.balances[id] = chips.get(id) ?? poker.balances[id] ?? POKER_DEFAULT_CHIPS;
+  }
+
   /** Ends the game, closes the room to the lobby and settles inside the room lock. */
   private async finishChess(room: Room, outcome: ChessOutcome, reason: ChessReason): Promise<void> {
     const chess = room.chess as ChessGameState;
@@ -275,6 +430,44 @@ export function colorOf(chess: ChessGameState, userId: string): ChessColor | nul
   return null;
 }
 
+export const POKER_DEFAULT_CHIPS = 1000;
+
+export function handActive(poker: PokerTableState): boolean {
+  return poker.hand !== null && !isHandOver(poker.hand);
+}
+
+/** The hand seat of a user, only while that user still occupies the seat they started the hand in. */
+export function handSeatOf(poker: PokerTableState, userId: string, seatIdx?: number): number | null {
+  const seat = seatIdx ?? poker.seats.findIndex((s) => s?.kind === 'human' && s.userId === userId);
+  if (seat < 0 || !poker.hand) return null;
+  const p = poker.handPlayers[seat];
+  return p?.userId === userId && poker.hand.players.some((x) => x.seat === seat) ? seat : null;
+}
+
+function seatedIndexes(poker: PokerTableState): number[] {
+  return poker.seats.flatMap((s, i) => (s ? [i] : []));
+}
+
+function nextSeatAfter(seats: number[], after: number): number {
+  return seats.find((s) => s > after) ?? (seats[0] as number);
+}
+
+/** Prefers seats that are not part of the running hand so a newcomer never inherits a hand seat. */
+function pickFreeSeat(poker: PokerTableState): number {
+  const free = poker.seats.flatMap((s, i) => (s === null ? [i] : []));
+  if (handActive(poker)) {
+    const fresh = free.find((i) => !(i in poker.handPlayers));
+    if (fresh !== undefined) return fresh;
+  }
+  return free[0] ?? -1;
+}
+
+function requirePokerMember(room: Room, userId: string): PokerTableState {
+  if (!room.members.some((m) => m.userId === userId)) throw new AppError('NOT_IN_ROOM');
+  if (!room.poker) throw new AppError('GAME_NOT_ACTIVE');
+  return room.poker;
+}
+
 export function occupiedCount(room: Room): number {
   if (room.poker) return room.poker.seats.filter((s) => s !== null).length;
   return room.members.length;
@@ -283,5 +476,6 @@ export function occupiedCount(room: Room): number {
 export function roomStatus(room: Room): 'waiting' | 'playing' | 'closed' {
   if (room.closed) return 'closed';
   if (room.chess) return room.chess.status === 'waiting' ? 'waiting' : 'playing';
+  if (room.poker && handActive(room.poker)) return 'playing';
   return 'waiting';
 }

@@ -45,6 +45,13 @@ export const api = {
     request<{ room: RoomSnapshot }>('POST', `/api/rooms/${encodeURIComponent(id)}/chess/draw-offer`),
   chessDrawResponse: (id: string, accept: boolean) =>
     request<{ room: RoomSnapshot }>('POST', `/api/rooms/${encodeURIComponent(id)}/chess/draw-response`, { accept }),
+  pokerStart: (id: string) => request<{ room: RoomSnapshot }>('POST', `/api/rooms/${encodeURIComponent(id)}/poker/start`),
+  pokerAction: (id: string, type: 'fold' | 'check' | 'call' | 'bet' | 'raise', amount?: number) =>
+    request<{ room: RoomSnapshot }>(
+      'POST',
+      `/api/rooms/${encodeURIComponent(id)}/poker/action`,
+      amount === undefined ? { type } : { type, amount },
+    ),
   roomState: (id: string) => request<{ room: RoomSnapshot }>('GET', `/api/rooms/${encodeURIComponent(id)}/state`),
 };
 

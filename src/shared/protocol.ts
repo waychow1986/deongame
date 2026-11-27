@@ -22,6 +22,9 @@ export const ERROR_MESSAGES = {
   GAME_NOT_ACTIVE: '对局未在进行中',
   DRAW_OFFER_PENDING: '已有待回应的提和',
   NO_DRAW_OFFER: '没有待回应的提和',
+  ILLEGAL_ACTION: '行动不合规',
+  HAND_IN_PROGRESS: '手牌进行中，暂不能进行此操作',
+  NOT_ENOUGH_PLAYERS: '至少需要 2 名玩家才能开始',
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_MESSAGES;
@@ -93,18 +96,67 @@ export interface ChessResultView {
   ratingChanges: { userId: string; delta: number; rating: number }[];
 }
 
+export type PokerStage = 'idle' | 'preflop' | 'flop' | 'turn' | 'river' | 'showdown' | 'complete';
+export type PokerActionType = 'fold' | 'check' | 'call' | 'bet' | 'raise';
+export type PokerLogType = PokerActionType | 'small_blind' | 'big_blind' | 'leave_fold';
+export type PokerHandRank =
+  | 'high_card'
+  | 'one_pair'
+  | 'two_pair'
+  | 'three_of_a_kind'
+  | 'straight'
+  | 'flush'
+  | 'full_house'
+  | 'four_of_a_kind'
+  | 'straight_flush'
+  | 'royal_flush';
+
 export interface PokerSeatView {
   seat: number;
   kind: 'human' | 'bot';
   userId?: string;
   name: string;
+  chips: number;
+  committedThisHand: number;
+  committedThisRound: number;
+  inHand: boolean;
+  folded: boolean;
+  atCap: boolean;
+  waitingNextHand: boolean;
+  isDealer: boolean;
+  isSmallBlind: boolean;
+  isBigBlind: boolean;
+  /** Only for the viewer's own seat or seats revealed at showdown. */
+  holeCards?: string[];
+}
+
+export interface PokerLegalActions {
+  fold: boolean;
+  check: boolean;
+  call: boolean;
+  callAmount: number;
+  bet: boolean;
+  raise: boolean;
+  minRaiseTo: number;
+  maxRaiseTo: number;
 }
 
 export interface PokerView {
   handId: string | null;
   handNumber: number;
-  stage: 'idle';
+  stage: PokerStage;
+  blinds: { small: number; big: number };
+  handCommitCap: number;
+  board: string[];
+  pot: number;
+  currentBet: number;
+  toActSeat: number | null;
   seats: PokerSeatView[];
+  /** `amount` is what the action put in; `to` is the round total after a bet / raise. */
+  actions: { seat: number; name: string; type: PokerLogType; amount: number; to?: number }[];
+  showdown: { seat: number; holeCards: string[]; handRank: PokerHandRank; handLabel: string }[];
+  winners: { seat: number; name: string; amount: number }[];
+  you: { seat: number | null; legal: PokerLegalActions | null };
 }
 
 export interface RoomSnapshot {

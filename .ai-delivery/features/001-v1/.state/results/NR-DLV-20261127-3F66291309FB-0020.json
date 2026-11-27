@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "stepId": "S26",
+  "result": "done",
+  "summary": "完成第 3 批德州扑克（AC-14/AC-15：牌型引擎、开局与盲注、行动规则、底牌按视角裁剪 DC-02、每手结算与自动下一手、中途加入/离开、筹码持久化、牌桌界面与 docs/api.md）；实际运行：lint、typecheck、build 通过（约 7 秒），全量单元测试 77 项通过（约 1 秒，含本批新写 poker 17 项与 pokerRoom 5 项，先红后绿），全量集成测试 39 项通过（约 3 秒，含本批新写 poker 10 项），本批新写端到端用例 e2e/poker.spec.ts 1 个在 chromium 与 mobile 两个项目各运行一次均通过（含构建约 6 秒），既有端到端用例未运行（交由 G3 独立测试验证）；自行决定的技术细节：bet/raise 金额须为正整数在 HTTP 层以 400 VALIDATION_FAILED 拒绝、“无下注可跟”的提示文案“当前没有需要跟注的下注”、座位编号显示为 1 起。",
+  "asks": [],
+  "outputs": [
+    "src/shared/poker/cards.ts",
+    "src/shared/poker/evaluator.ts",
+    "src/shared/poker/pots.ts",
+    "src/shared/poker/hand.ts",
+    "src/shared/poker/index.ts",
+    "src/shared/constants.ts",
+    "src/shared/protocol.ts",
+    "src/server/errors.ts",
+    "src/server/rooms/roomManager.ts",
+    "src/server/rooms/view.ts",
+    "src/server/rooms/pokerSettlement.ts",
+    "src/server/db/pokerSettlements.ts",
+    "src/server/http/pokerRoutes.ts",
+    "src/server/http/roomRoutes.ts",
+    "src/server/http/app.ts",
+    "src/web/api.ts",
+    "src/web/components/PokerTable.tsx",
+    "src/web/pages/RoomPage.tsx",
+    "src/web/styles.css",
+    "tests/unit/poker.test.ts",
+    "tests/unit/pokerRoom.test.ts",
+    "tests/integration/poker.test.ts",
+    "e2e/poker.spec.ts",
+    "docs/api.md"
+  ]
+}

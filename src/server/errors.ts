@@ -17,6 +17,9 @@ const STATUS: Record<ErrorCode, number> = {
   GAME_NOT_ACTIVE: 409,
   DRAW_OFFER_PENDING: 409,
   NO_DRAW_OFFER: 409,
+  ILLEGAL_ACTION: 409,
+  HAND_IN_PROGRESS: 409,
+  NOT_ENOUGH_PLAYERS: 409,
 };
 
 export class AppError extends Error {

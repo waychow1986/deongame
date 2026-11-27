@@ -11,12 +11,14 @@ import { SessionStore } from '../auth/sessions.js';
 import type { AppConfig } from '../config.js';
 import type { AppContext, Broadcaster } from '../context.js';
 import { runMigrations } from '../db/migrate.js';
+import { loadChipBalances } from '../db/pokerSettlements.js';
 import { createPool, createPoolWithRetry } from '../db/pool.js';
 import { UserRepository } from '../db/users.js';
 import { AppError } from '../errors.js';
 import type { Logger } from '../logger.js';
 import { attachRealtime } from '../realtime/socket.js';
 import { createChessSettler } from '../rooms/chessSettlement.js';
+import { createPokerSettler } from '../rooms/pokerSettlement.js';
 import { RoomManager } from '../rooms/roomManager.js';
 import { authRoutes } from './authRoutes.js';
 import { roomRoutes } from './roomRoutes.js';
@@ -56,7 +58,18 @@ export async function createServer(opts: CreateServerOptions): Promise<RunningSe
     pool,
     users: new UserRepository(pool),
     sessions: new SessionStore(pool),
-    rooms: new RoomManager({ rng, onChessFinished: createChessSettler(pool, logger, broadcasterProxy) }),
+    rooms: new RoomManager({
+      rng,
+      onChessFinished: createChessSettler(pool, logger, broadcasterProxy),
+      loadChips: (ids) => loadChipBalances(pool, ids),
+      onPokerSettled: createPokerSettler(pool, logger),
+      onPokerUpdate: (room) =>
+        broadcasterProxy.roomChanged(
+          room.id,
+          room.members.map((m) => m.userId),
+        ),
+      pokerNextHandDelayMs: config.pokerNextHandDelayMs,
+    }),
     broadcaster: broadcasterProxy,
   };
 

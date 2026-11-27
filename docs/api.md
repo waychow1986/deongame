@@ -59,7 +59,12 @@
   - `board`：只列出有棋子的位置 `[{pos, side, piece}]`，`pos` 为 `"{列}{行}"`（列 a–i，行 0–9，红方在 0–4 行）；盖着的棋子 `piece` 恒为 `"hidden"`，对任何人（包括持有者）都不暴露身份。
   - `captured`：`[{side, piece}]`，被吃的盖棋也显示实际身份。`lastMove`：`{from, to, side, revealed?, captured?}` 或 `null`。
   - `drawOffer`：`{by}` 或 `null`。`result`：`{outcome: "red_win"|"black_win"|"draw", reason: "checkmate"|"stalemate"|"resign"|"draw_agreed"|"bare_kings", settled, ratingChanges:[{userId, delta, rating}]}` 或 `null`（`settled=false` 表示结算写库失败、后台每 5 秒重试）。
-- `poker`：`{ handId, handNumber, stage, seats:[{seat,kind,userId?,name}] }`（牌局在后续批次加入）。
+- `poker`：`{ handId, handNumber, stage: "idle"|"preflop"|"flop"|"turn"|"river"|"showdown"|"complete", blinds:{small:5,big:10}, handCommitCap:1000, board, pot, currentBet, toActSeat, seats, actions, showdown, winners, you:{seat, legal} }`。
+  - 牌面为两位字符串：点数 `23456789TJQKA` + 花色 `s h d c`（如 `"Ah"`、`"Td"`）。
+  - `seats[]`：`{seat, kind, userId?, name, chips, committedThisHand, committedThisRound, inHand, folded, atCap, waitingNextHand, isDealer, isSmallBlind, isBigBlind, holeCards?}`；`chips` 为扣除本手投入后的余额（可为负数）。`holeCards` 只对查看者本人的座位、以及摊牌时亮牌的座位出现，其他人的底牌不会出现在任何响应或推送中。
+  - `actions[]`：`{seat, name, type: "small_blind"|"big_blind"|"fold"|"check"|"call"|"bet"|"raise"|"leave_fold", amount, to?}`；`to` 为下注/加注后的本轮总额。
+  - `showdown[]`：`{seat, holeCards, handRank, handLabel}`；`winners[]`：`{seat, name, amount}`（`amount` 为分得的底池）。
+  - `you.legal`：只在轮到查看者时非空，`{fold, check, call, callAmount, bet, raise, minRaiseTo, maxRaiseTo}`。
 
 ### GET /api/rooms
 
@@ -92,6 +97,15 @@
 - `POST /api/rooms/:id/chess/draw-response`，请求 `{ "accept": true|false }`：只有被提和的一方可回应（`409 NO_DRAW_OFFER`）；同意即和棋。
 
 对局结束（将死或困毙判负、认输、离开即认输、同意和棋、双方只剩将帅自动和棋）时在房间锁内写库结算：胜 +10、负 −10、和 0，每局只结算一次。结束后房间从大厅移除，成员仍留在房间内直至“返回大厅”（调用 leave）；离开已结束的对局不再计分。
+
+### 德州扑克
+
+以下接口成功均返回 `200 { room }`（请求者视角），并向房间其他成员推送各自视角的 `room:state`。通用错误：`403 NOT_IN_ROOM`、`404 ROOM_NOT_FOUND`。被拒绝的操作不改变牌局状态。
+
+- `POST /api/rooms/:id/poker/start`：仅房主；至少 2 名玩家入座（`409 NOT_ENOUGH_PLAYERS`）、当前无进行中的牌局（`409 HAND_IN_PROGRESS`），非房主 `403 NOT_HOST`。庄家位从房主开始，每手顺时针轮转；单挑时庄家下小盲、翻牌前先行动。
+- `POST /api/rooms/:id/poker/action`，请求 `{ "type": "fold"|"check"|"call"|"bet"|"raise", "amount"?: n }`：`amount` 为下注/加注后的本轮总额（“下注到”），`bet`/`raise` 必填正整数。`400 VALIDATION_FAILED`、`409 GAME_NOT_ACTIVE`（无进行中的牌局）、`409 NOT_YOUR_TURN`、`409 ILLEGAL_ACTION`（如有下注时过牌、无下注时跟注、加注额不足或超过每手 1000 上限）。
+
+每手结束（只剩一人或摊牌）时按净输赢写库结算筹码（每手只结算一次，余额可为负数；写库失败时后台每 5 秒重试），随后约 4 秒（`POKER_NEXT_HAND_DELAY_MS`）自动开始下一手（不足 2 人时停在 `idle`）。牌局中加入的玩家标记 `waitingNextHand`，下一手入局；牌局中离开视为弃牌，按已投入额结算。
 
 ### GET /api/rooms/:id/state
 

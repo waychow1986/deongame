@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router';
 import type { ChessReason, ChessView, RoomSnapshot } from '../../shared/protocol.js';
 import { api, errorMessage } from '../api.js';
 import { ChessBoard, pieceLabel } from '../components/ChessBoard.js';
+import { PokerTable } from '../components/PokerTable.js';
 import { connectSocket } from '../socket.js';
 
 export function RoomPage() {
@@ -113,7 +114,14 @@ export function RoomPage() {
               youId={room.you.userId}
             />
           )}
-          {room.poker && <p className="muted">{room.members.length > 1 ? '玩家已入座' : '等待其他玩家加入'}</p>}
+          {room.poker && (
+            <PokerTable
+              poker={room.poker}
+              isHost={room.hostUserId === room.you.userId}
+              onStart={() => void act(() => api.pokerStart(id))}
+              onAction={(type, amount) => void act(() => api.pokerAction(id, type, amount))}
+            />
+          )}
         </>
       )}
       {!room?.chess?.result && (

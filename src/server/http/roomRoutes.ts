@@ -5,6 +5,7 @@ import { AppError } from '../errors.js';
 import type { AppContext } from '../context.js';
 import { viewFor } from '../rooms/view.js';
 import { chessRoutes } from './chessRoutes.js';
+import { pokerRoutes } from './pokerRoutes.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -65,6 +66,7 @@ export function roomRoutes(ctx: AppContext): Router {
 
   // Mounted after requireAuth so the chess endpoints share the same authentication.
   router.use(chessRoutes(ctx));
+  router.use(pokerRoutes(ctx));
 
   return router;
 }

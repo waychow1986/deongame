@@ -1,6 +1,8 @@
-import type { ChessColor, ChessSquareView, RoomSnapshot } from '../../shared/protocol.js';
+import { POKER_BIG_BLIND, POKER_HAND_COMMIT_CAP, POKER_SMALL_BLIND } from '../../shared/constants.js';
+import { HAND_LABELS, legalActions, potTotal } from '../../shared/poker/index.js';
+import type { ChessColor, ChessSquareView, PokerSeatView, PokerView, RoomSnapshot } from '../../shared/protocol.js';
 import { isInCheck } from '../../shared/xiangqi/index.js';
-import { roomStatus, type Room } from './roomManager.js';
+import { handActive, POKER_DEFAULT_CHIPS, roomStatus, type PokerTableState, type Room } from './roomManager.js';
 
 /** The only place where room state leaves the server; output is tailored to the viewer. */
 export function viewFor(room: Room, viewerUserId: string): RoomSnapshot {
@@ -55,15 +57,76 @@ export function viewFor(room: Room, viewerUserId: string): RoomSnapshot {
         : null,
     };
   }
-  if (room.poker) {
-    snap.poker = {
-      handId: null,
-      handNumber: room.poker.handNumber,
-      stage: 'idle',
-      seats: room.poker.seats.flatMap((s, seat) =>
-        s ? [{ seat, kind: s.kind, ...(s.userId ? { userId: s.userId } : {}), name: s.name }] : [],
-      ),
-    };
-  }
+  if (room.poker) snap.poker = pokerView(room.poker, viewerUserId);
   return snap;
+}
+
+/** Hole cards appear only for the viewer's own seat or seats revealed at showdown (FR-052, FR-056). */
+function pokerView(poker: PokerTableState, viewerUserId: string): PokerView {
+  const hand = poker.hand;
+  const active = handActive(poker);
+  const nameOf = (seat: number) => poker.handPlayers[seat]?.name ?? poker.seats[seat]?.name ?? '';
+  const yourSeatIdx = poker.seats.findIndex((s) => s?.kind === 'human' && s.userId === viewerUserId);
+  const yourSeat = yourSeatIdx >= 0 ? yourSeatIdx : null;
+  const seats = poker.seats.flatMap((s, seat): PokerSeatView[] => {
+    if (!s) return [];
+    // Hand data belongs to the seat only if the same occupant started the hand there.
+    const starter = poker.handPlayers[seat];
+    const sameOccupant = !!starter && starter.kind === s.kind && starter.userId === s.userId;
+    const hp = hand && sameOccupant ? hand.players.find((p) => p.seat === seat) : undefined;
+    const balance = s.userId ? (poker.balances[s.userId] ?? POKER_DEFAULT_CHIPS) : 0;
+    const unsettled = hp && s.userId && !poker.settledUserIds.includes(s.userId) ? hp.committed : 0;
+    const revealed = hand?.showdown.find((x) => x.seat === seat && hp);
+    const own = !!hp && s.userId === viewerUserId;
+    return [
+      {
+        seat,
+        kind: s.kind,
+        ...(s.userId ? { userId: s.userId } : {}),
+        name: s.name,
+        chips: balance - unsettled,
+        committedThisHand: hp?.committed ?? 0,
+        committedThisRound: hp?.roundBet ?? 0,
+        inHand: !!hp,
+        folded: hp?.folded ?? false,
+        atCap: !!hp && hp.committed >= POKER_HAND_COMMIT_CAP,
+        waitingNextHand: s.waitingNextHand ?? false,
+        isDealer: !!hand && hand.dealerSeat === seat,
+        isSmallBlind: !!hand && hand.sbSeat === seat,
+        isBigBlind: !!hand && hand.bbSeat === seat,
+        ...(hp && (own || revealed) ? { holeCards: [...hp.hole] } : {}),
+      },
+    ];
+  });
+  const yourHandSeat = yourSeat !== null && seats.find((x) => x.seat === yourSeat)?.inHand ? yourSeat : null;
+  return {
+    handId: hand?.id ?? null,
+    handNumber: poker.handNumber,
+    stage: hand?.stage ?? 'idle',
+    blinds: { small: POKER_SMALL_BLIND, big: POKER_BIG_BLIND },
+    handCommitCap: POKER_HAND_COMMIT_CAP,
+    board: hand ? [...hand.board] : [],
+    pot: hand ? potTotal(hand) : 0,
+    currentBet: hand?.currentBet ?? 0,
+    toActSeat: active ? (hand?.toAct ?? null) : null,
+    seats,
+    actions: (hand?.actions ?? []).map((a) => ({
+      seat: a.seat,
+      name: nameOf(a.seat),
+      type: a.type,
+      amount: a.amount,
+      ...(a.to !== undefined ? { to: a.to } : {}),
+    })),
+    showdown: (hand?.showdown ?? []).map((x) => ({
+      seat: x.seat,
+      holeCards: [...x.holeCards],
+      handRank: x.handRank,
+      handLabel: HAND_LABELS[x.handRank],
+    })),
+    winners: (hand?.winners ?? []).map((w) => ({ seat: w.seat, name: nameOf(w.seat), amount: w.amount })),
+    you: {
+      seat: yourSeat,
+      legal: active && hand && yourHandSeat !== null && hand.toAct === yourHandSeat ? legalActions(hand, yourHandSeat) : null,
+    },
+  };
 }
