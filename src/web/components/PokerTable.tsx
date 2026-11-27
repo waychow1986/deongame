@@ -5,7 +5,10 @@ import { cardLabel } from '../../shared/poker/cards.js';
 export interface PokerTableProps {
   poker: PokerView;
   isHost: boolean;
+  /** Number of seats at the table. */
+  capacity: number;
   onStart: () => void;
+  onAddBot: () => void;
   onAction: (type: 'fold' | 'check' | 'call' | 'bet' | 'raise', amount?: number) => void;
 }
 
@@ -56,7 +59,7 @@ function seatStatus(s: PokerSeatView, poker: PokerView): string[] {
   return words;
 }
 
-export function PokerTable({ poker, isHost, onStart, onAction }: PokerTableProps) {
+export function PokerTable({ poker, isHost, capacity, onStart, onAddBot, onAction }: PokerTableProps) {
   const legal = poker.you.legal;
   const [amount, setAmount] = useState<number>(legal?.minRaiseTo ?? poker.blinds.big);
   const handRunning = poker.toActSeat !== null;
@@ -109,6 +112,11 @@ export function PokerTable({ poker, isHost, onStart, onAction }: PokerTableProps
         {isHost && (
           <button type="button" disabled={handRunning || poker.seats.length < 2} onClick={onStart}>
             开始牌局
+          </button>
+        )}
+        {isHost && (
+          <button type="button" disabled={handRunning || poker.seats.length >= capacity} onClick={onAddBot}>
+            添加电脑玩家
           </button>
         )}
         <button type="button" disabled={!legal?.fold} onClick={() => onAction('fold')}>

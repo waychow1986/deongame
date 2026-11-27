@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "stepId": "S28",
+  "result": "done",
+  "summary": "第 4 批（AC-11 象棋电脑对手与 POST /api/chess/ai-games、规格 AC-17 扑克电脑玩家 POST /api/rooms/:id/poker/bots 及自动行动、大厅/房间/牌桌界面与接口文档）已实现：lint、typecheck、build 通过（约 2 秒构建）；全量单元测试 93 项全部通过（约 7 秒，其中新写 tests/unit/ai.test.ts 7 项与 tests/unit/aiRoom.test.ts 8 项在实现前运行确认失败、实现后通过）；全量集成测试 44 项全部通过（约 4 秒，含新写 tests/integration/ai.test.ts 5 项，该文件在实现之后编写，失败先行证据由上述单元测试提供）；新写的端到端用例 e2e/ai.spec.ts 2 个在 chromium 与 mobile 两个项目下共 4 次全部通过（约 6 秒）；既有端到端用例按规定未在会话中运行，交由 G3 独立测试在测试环境验证，测试环境部署未在本会话验证；技术细节（电脑玩家强牌加注只在当前下注不超过 4 倍大盲时进行以避免机器人之间无限加注、电脑走棋 2 层搜索与同分随机）按技术方案自行决定。",
+  "asks": [],
+  "outputs": [
+    "src/shared/ai/chessAi.ts",
+    "src/shared/ai/pokerBot.ts",
+    "src/shared/ai/index.ts",
+    "src/server/rooms/roomManager.ts",
+    "src/server/rooms/view.ts",
+    "src/server/http/app.ts",
+    "src/server/http/roomRoutes.ts",
+    "src/server/http/pokerRoutes.ts",
+    "src/web/api.ts",
+    "src/web/pages/LobbyPage.tsx",
+    "src/web/pages/RoomPage.tsx",
+    "src/web/components/PokerTable.tsx",
+    "docs/api.md",
+    "tests/unit/ai.test.ts",
+    "tests/unit/aiRoom.test.ts",
+    "tests/integration/ai.test.ts",
+    "e2e/ai.spec.ts"
+  ]
+}

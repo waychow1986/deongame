@@ -2,7 +2,7 @@ import { POKER_BIG_BLIND, POKER_HAND_COMMIT_CAP, POKER_SMALL_BLIND } from '../..
 import { HAND_LABELS, legalActions, potTotal } from '../../shared/poker/index.js';
 import type { ChessColor, ChessSquareView, PokerSeatView, PokerView, RoomSnapshot } from '../../shared/protocol.js';
 import { isInCheck } from '../../shared/xiangqi/index.js';
-import { handActive, POKER_DEFAULT_CHIPS, roomStatus, type PokerTableState, type Room } from './roomManager.js';
+import { COMPUTER_NAME, handActive, POKER_DEFAULT_CHIPS, roomStatus, type PokerTableState, type Room } from './roomManager.js';
 
 /** The only place where room state leaves the server; output is tailored to the viewer. */
 export function viewFor(room: Room, viewerUserId: string): RoomSnapshot {
@@ -27,7 +27,11 @@ export function viewFor(room: Room, viewerUserId: string): RoomSnapshot {
       status: c.status,
       players: {
         red: c.players.red ? { userId: c.players.red.userId, username: c.players.red.username } : null,
-        black: c.players.black ? { userId: c.players.black.userId, username: c.players.black.username } : null,
+        black: c.players.black
+          ? { userId: c.players.black.userId, username: c.players.black.username }
+          : room.mode === 'ai'
+            ? { computer: true, username: COMPUTER_NAME }
+            : null,
       },
       yourColor,
       turn: c.turn,
@@ -74,8 +78,17 @@ function pokerView(poker: PokerTableState, viewerUserId: string): PokerView {
     const starter = poker.handPlayers[seat];
     const sameOccupant = !!starter && starter.kind === s.kind && starter.userId === s.userId;
     const hp = hand && sameOccupant ? hand.players.find((p) => p.seat === seat) : undefined;
-    const balance = s.userId ? (poker.balances[s.userId] ?? POKER_DEFAULT_CHIPS) : 0;
-    const unsettled = hp && s.userId && !poker.settledUserIds.includes(s.userId) ? hp.committed : 0;
+    const balance = s.userId ? (poker.balances[s.userId] ?? POKER_DEFAULT_CHIPS) : (s.chips ?? POKER_DEFAULT_CHIPS);
+    // A bot's chips are updated when its hand ends; until then subtract what it has put in.
+    const unsettled = !hp
+      ? 0
+      : s.userId
+        ? poker.settledUserIds.includes(s.userId)
+          ? 0
+          : hp.committed
+        : active
+          ? hp.committed
+          : 0;
     const revealed = hand?.showdown.find((x) => x.seat === seat && hp);
     const own = !!hp && s.userId === viewerUserId;
     return [

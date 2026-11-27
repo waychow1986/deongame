@@ -24,6 +24,13 @@ export function roomRoutes(ctx: AppContext): Router {
   const router = Router();
   router.use('/api/rooms', requireAuth(ctx));
 
+  router.post('/api/chess/ai-games', requireAuth(ctx), async (req, res) => {
+    const me = member(req);
+    const room = await ctx.rooms.createAiGame(me);
+    ctx.logger.info({ event: 'ai_game_created', userId: me.userId, roomId: room.id, gameId: room.chess?.id }, 'ai game created');
+    res.status(201).json({ room: viewFor(room, me.userId) });
+  });
+
   router.get('/api/rooms', (_req, res) => {
     res.json({ rooms: ctx.rooms.list() });
   });

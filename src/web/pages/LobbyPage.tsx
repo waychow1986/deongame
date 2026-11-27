@@ -75,6 +75,9 @@ export function LobbyPage() {
         <button type="button" disabled={busy} onClick={() => act(() => api.createRoom('poker'))}>
           开德州扑克房间
         </button>
+        <button type="button" disabled={busy} onClick={() => act(() => api.createAiGame())}>
+          与电脑下盲棋
+        </button>
         <button type="button" onClick={() => void refresh()}>
           刷新房间列表
         </button>

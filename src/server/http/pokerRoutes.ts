@@ -39,6 +39,14 @@ export function pokerRoutes(ctx: AppContext): Router {
     respond(res, room, me.userId, 'poker_hand_started');
   });
 
+  router.post('/api/rooms/:id/poker/bots', async (req, res) => {
+    const roomId = roomIdParam(req);
+    const me = member(req);
+    const room = await ctx.rooms.addPokerBot(me.userId, roomId);
+    res.status(201);
+    respond(res, room, me.userId, 'poker_bot_added');
+  });
+
   router.post('/api/rooms/:id/poker/action', async (req, res) => {
     const roomId = roomIdParam(req);
     const action = parseAction(req);

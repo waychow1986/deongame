@@ -98,11 +98,18 @@
 
 对局结束（将死或困毙判负、认输、离开即认输、同意和棋、双方只剩将帅自动和棋）时在房间锁内写库结算：胜 +10、负 −10、和 0，每局只结算一次。结束后房间从大厅移除，成员仍留在房间内直至“返回大厅”（调用 leave）；离开已结束的对局不再计分。
 
+### POST /api/chess/ai-games
+
+- 请求 `{}`，`201 { room }`：创建与电脑的揭棋对局（`mode: "ai"`），创建即开局，用户执红先走；`players.black` 为 `{ "computer": true, "username": "电脑" }`。
+- 该对局不出现在大厅列表中，其他用户加入返回 `404 ROOM_NOT_FOUND`；已在其他房间时 `409 ALREADY_IN_ROOM`；未登录 `401`。
+- 用户走棋后电脑约 `AI_MOVE_DELAY_MS`（默认 600ms）后自动走棋（只基于公开局面，按同一引擎合规着法），走后推送 `room:state`。电脑收到提和立即同意（和棋），从不主动提和。结算只改变用户积分。
+
 ### 德州扑克
 
 以下接口成功均返回 `200 { room }`（请求者视角），并向房间其他成员推送各自视角的 `room:state`。通用错误：`403 NOT_IN_ROOM`、`404 ROOM_NOT_FOUND`。被拒绝的操作不改变牌局状态。
 
 - `POST /api/rooms/:id/poker/start`：仅房主；至少 2 名玩家入座（`409 NOT_ENOUGH_PLAYERS`）、当前无进行中的牌局（`409 HAND_IN_PROGRESS`），非房主 `403 NOT_HOST`。庄家位从房主开始，每手顺时针轮转；单挑时庄家下小盲、翻牌前先行动。
+- `POST /api/rooms/:id/poker/bots`，请求 `{}`，`201 { room }`：仅房主（`403 NOT_HOST`）在无进行中的手牌时（`409 HAND_IN_PROGRESS`）添加电脑玩家“电脑 1”“电脑 2”…，占一个座位并计入人数（满 9 人 `409 ROOM_FULL`）。电脑玩家筹码 1000、只在本房间内存中，不影响任何用户的积分或余额；轮到它时约 `POKER_BOT_DELAY_MS`（默认 800ms）后自动按合规行动入口行动。房间无真人时随房间移除。
 - `POST /api/rooms/:id/poker/action`，请求 `{ "type": "fold"|"check"|"call"|"bet"|"raise", "amount"?: n }`：`amount` 为下注/加注后的本轮总额（“下注到”），`bet`/`raise` 必填正整数。`400 VALIDATION_FAILED`、`409 GAME_NOT_ACTIVE`（无进行中的牌局）、`409 NOT_YOUR_TURN`、`409 ILLEGAL_ACTION`（如有下注时过牌、无下注时跟注、加注额不足或超过每手 1000 上限）。
 
 每手结束（只剩一人或摊牌）时按净输赢写库结算筹码（每手只结算一次，余额可为负数；写库失败时后台每 5 秒重试），随后约 4 秒（`POKER_NEXT_HAND_DELAY_MS`）自动开始下一手（不足 2 人时停在 `idle`）。牌局中加入的玩家标记 `waitingNextHand`，下一手入局；牌局中离开视为弃牌，按已投入额结算。

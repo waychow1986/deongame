@@ -77,7 +77,14 @@ export function RoomPage() {
     }
   }
 
-  const title = room?.game === 'poker' ? '德州扑克房间' : room?.game === 'chess' ? '中国象棋房间' : '房间';
+  const title =
+    room?.game === 'poker'
+      ? '德州扑克房间'
+      : room?.mode === 'ai'
+        ? '与电脑对战'
+        : room?.game === 'chess'
+          ? '中国象棋房间'
+          : '房间';
 
   return (
     <main className="page">
@@ -118,7 +125,9 @@ export function RoomPage() {
             <PokerTable
               poker={room.poker}
               isHost={room.hostUserId === room.you.userId}
+              capacity={room.capacity}
               onStart={() => void act(() => api.pokerStart(id))}
+              onAddBot={() => void act(() => api.addPokerBot(id))}
               onAction={(type, amount) => void act(() => api.pokerAction(id, type, amount))}
             />
           )}

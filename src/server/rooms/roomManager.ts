@@ -11,6 +11,7 @@ import {
   type HandState,
   type PlayerAction,
 } from '../../shared/poker/index.js';
+import { chooseBotAction, chooseChessMove } from '../../shared/ai/index.js';
 import { applyMove, createBoard, type Board, type MoveRecord } from '../../shared/xiangqi/index.js';
 import { AppError } from '../errors.js';
 import { AsyncMutex } from './mutex.js';
@@ -50,9 +51,21 @@ export interface RoomManagerOptions {
   /** Called after the server changed a poker room on its own (automatic next hand). */
   onPokerUpdate?: (room: Room) => void;
   pokerNextHandDelayMs?: number;
+  /** Called after a computer opponent / player changed a room on its own (AI move, bot action). */
+  onRoomUpdate?: (room: Room) => void;
+  /** Delay before the chess computer opponent moves (default 600 ms). */
+  aiMoveDelayMs?: number;
+  /** Delay before a poker computer player acts (default 800 ms). */
+  pokerBotDelayMs?: number;
   /** Reports a failure of work the server started on its own (e.g. the automatic next hand). */
-  onBackgroundError?: (err: unknown, info: { roomId: string; task: 'poker_next_hand' }) => void;
+  onBackgroundError?: (err: unknown, info: { roomId: string; task: BackgroundTask }) => void;
 }
+
+export type BackgroundTask = 'poker_next_hand' | 'chess_ai_move' | 'poker_bot_action';
+
+/** Display name of the chess computer opponent. */
+export const COMPUTER_NAME = '电脑';
+
 
 export interface PokerSeat {
   kind: 'human' | 'bot';
@@ -60,6 +73,8 @@ export interface PokerSeat {
   name: string;
   /** Joined while a hand was running; takes part from the next hand (FR-054). */
   waitingNextHand?: boolean;
+  /** Chip balance of a computer player; lives only in this room (FR-073). */
+  chips?: number;
 }
 
 export interface PokerTableState {
@@ -74,6 +89,8 @@ export interface PokerTableState {
   /** Users whose result for the current hand is already settled (left mid-hand or hand over). */
   settledUserIds: string[];
   nextHandPending: boolean;
+  /** Number of computer players added so far; names them "电脑 N". */
+  botCounter: number;
 }
 
 export interface Room {
@@ -105,6 +122,9 @@ export class RoomManager {
   private readonly onPokerSettled?: RoomManagerOptions['onPokerSettled'];
   private readonly onPokerUpdate?: (room: Room) => void;
   private readonly pokerNextHandDelayMs: number;
+  private readonly onRoomUpdate?: (room: Room) => void;
+  private readonly aiMoveDelayMs: number;
+  private readonly pokerBotDelayMs: number;
   private readonly onBackgroundError: NonNullable<RoomManagerOptions['onBackgroundError']>;
 
   constructor(opts: RoomManagerOptions = {}) {
@@ -115,6 +135,9 @@ export class RoomManager {
     this.onPokerSettled = opts.onPokerSettled;
     this.onPokerUpdate = opts.onPokerUpdate;
     this.pokerNextHandDelayMs = opts.pokerNextHandDelayMs ?? 4000;
+    this.onRoomUpdate = opts.onRoomUpdate;
+    this.aiMoveDelayMs = opts.aiMoveDelayMs ?? 600;
+    this.pokerBotDelayMs = opts.pokerBotDelayMs ?? 800;
   }
 
   get(roomId: string): Room | undefined {
@@ -184,9 +207,45 @@ export class RoomManager {
           balances: {},
           settledUserIds: [],
           nextHandPending: false,
+          botCounter: 0,
         };
         await this.refreshBalances(room.poker, [user.userId]);
       }
+      this.rooms.set(room.id, room);
+      this.userRoom.set(user.userId, room.id);
+      return room;
+    });
+  }
+
+  /** Starts a chess game against the computer: unlisted, the user plays red and moves first (FR-064). */
+  createAiGame(user: Member): Promise<Room> {
+    return this.globalLock.run(() => {
+      if (this.userRoom.has(user.userId)) throw new AppError('ALREADY_IN_ROOM');
+      const room: Room = {
+        id: randomUUID(),
+        game: 'chess',
+        mode: 'ai',
+        hostUserId: user.userId,
+        members: [{ ...user }],
+        capacity: CHESS_CAPACITY,
+        createdAt: Date.now() + this.rooms.size / 1000,
+        version: 1,
+        listed: false,
+        closed: false,
+        lock: new AsyncMutex(),
+        chess: {
+          id: randomUUID(),
+          status: 'active',
+          // The computer plays black and has no user entry, so only the user's result is recorded.
+          players: { red: { ...user } },
+          turn: 'red',
+          board: createBoard(this.rng),
+          captured: [],
+          lastMove: null,
+          drawOffer: null,
+          result: null,
+        },
+      };
       this.rooms.set(room.id, room);
       this.userRoom.set(user.userId, room.id);
       return room;
@@ -258,7 +317,10 @@ export class RoomManager {
       if (chess.drawOffer && chess.drawOffer.by !== color) chess.drawOffer = null;
       chess.turn = color === 'red' ? 'black' : 'red';
       if (res.end) await this.finishChess(room, res.end.outcome, res.end.reason);
-      else room.version += 1;
+      else {
+        room.version += 1;
+        if (room.mode === 'ai') this.scheduleAiMove(room);
+      }
     });
   }
 
@@ -271,6 +333,8 @@ export class RoomManager {
   chessDrawOffer(userId: string, roomId: string): Promise<Room> {
     return this.withChess(userId, roomId, (room, chess, color) => {
       if (chess.drawOffer) throw new AppError('DRAW_OFFER_PENDING');
+      // The computer opponent always accepts a draw (FR-064).
+      if (room.mode === 'ai') return this.finishChess(room, 'draw', 'draw_agreed');
       chess.drawOffer = { by: color };
       room.version += 1;
     });
@@ -288,6 +352,23 @@ export class RoomManager {
     });
   }
 
+  /** The host adds a computer player to a free seat between hands (spec AC-17, FR-070–072). */
+  addPokerBot(userId: string, roomId: string): Promise<Room> {
+    return this.globalLock.run(() =>
+      this.withRoom(roomId, (room) => {
+        const poker = requirePokerMember(room, userId);
+        if (room.hostUserId !== userId) throw new AppError('NOT_HOST');
+        if (handActive(poker) || poker.nextHandPending) throw new AppError('HAND_IN_PROGRESS');
+        const seat = pickFreeSeat(poker);
+        if (seat < 0) throw new AppError('ROOM_FULL');
+        poker.botCounter += 1;
+        poker.seats[seat] = { kind: 'bot', name: `${COMPUTER_NAME} ${poker.botCounter}`, chips: POKER_DEFAULT_CHIPS };
+        room.version += 1;
+        return room;
+      }),
+    );
+  }
+
   pokerStart(userId: string, roomId: string): Promise<Room> {
     return this.withRoom(roomId, async (room) => {
       const poker = requirePokerMember(room, userId);
@@ -296,6 +377,7 @@ export class RoomManager {
       if (seatedIndexes(poker).length < 2) throw new AppError('NOT_ENOUGH_PLAYERS');
       const hostSeat = poker.seats.findIndex((s) => s?.kind === 'human' && s.userId === room.hostUserId);
       await this.startPokerHand(room, poker.dealerSeat === null ? hostSeat : null);
+      this.scheduleBot(room);
       return room;
     });
   }
@@ -311,6 +393,7 @@ export class RoomManager {
       if (!res.ok) throw res.code === 'NOT_YOUR_TURN' ? new AppError('NOT_YOUR_TURN') : new AppError(res.code, res.message);
       if (isHandOver(hand)) await this.finishPokerHand(room);
       room.version += 1;
+      this.scheduleBot(room);
       return room;
     });
   }
@@ -327,6 +410,7 @@ export class RoomManager {
       const committed = hand.players.find((p) => p.seat === handSeat)?.committed ?? 0;
       await this.settlePoker(room, hand.id, [{ userId, delta: -committed }]);
       if (isHandOver(hand)) await this.finishPokerHand(room);
+      else this.scheduleBot(room);
     }
   }
 
@@ -354,7 +438,15 @@ export class RoomManager {
   private async finishPokerHand(room: Room): Promise<void> {
     const poker = room.poker as PokerTableState;
     const hand = poker.hand as HandState;
-    const deltas = netResults(hand).flatMap(({ seat, net }) => {
+    const nets = netResults(hand);
+    // Computer players keep their chips in the room only (FR-073).
+    for (const { seat, net } of nets) {
+      const live = poker.seats[seat];
+      if (live?.kind === 'bot' && poker.handPlayers[seat]?.kind === 'bot' && poker.handPlayers[seat]?.name === live.name) {
+        live.chips = (live.chips ?? POKER_DEFAULT_CHIPS) + net;
+      }
+    }
+    const deltas = nets.flatMap(({ seat, net }) => {
       const p = poker.handPlayers[seat];
       if (p?.kind !== 'human' || !p.userId || poker.settledUserIds.includes(p.userId)) return [];
       return [{ userId: p.userId, delta: net }];
@@ -384,6 +476,7 @@ export class RoomManager {
           await this.startPokerHand(room, null);
           room.version += 1;
           this.onPokerUpdate?.(room);
+          this.scheduleBot(room);
         })
         // startPokerHand reads balances before changing any state, so on failure the table stays at the
         // finished hand with nextHandPending cleared and the host can start the next hand manually.
@@ -395,6 +488,59 @@ export class RoomManager {
           }
         });
     }, this.pokerNextHandDelayMs);
+    timer.unref();
+  }
+
+  /** Lets the chess computer opponent (black) reply after a delay, inside the room lock. */
+  private scheduleAiMove(room: Room): void {
+    const chess = room.chess as ChessGameState;
+    const gameId = chess.id;
+    this.runLater(room, 'chess_ai_move', this.aiMoveDelayMs, async () => {
+      if (room.closed || chess.id !== gameId || chess.status !== 'active' || chess.turn !== 'black') return;
+      const choice = chooseChessMove({ board: chess.board, side: 'black', captured: chess.captured, rng: this.rng });
+      if (!choice) return;
+      const res = applyMove(chess.board, 'black', choice.from, choice.to);
+      if (!res.ok) throw new Error(`computer chose an illegal move: ${res.code}`);
+      chess.board = res.board;
+      chess.lastMove = res.move;
+      if (res.move.captured) chess.captured.push(res.move.captured);
+      chess.turn = 'red';
+      if (res.end) await this.finishChess(room, res.end.outcome, res.end.reason);
+      else room.version += 1;
+      this.onRoomUpdate?.(room);
+    });
+  }
+
+  /** If a computer player is to act in the running hand, lets it act after a delay. */
+  private scheduleBot(room: Room): void {
+    const poker = room.poker as PokerTableState;
+    const hand = poker.hand;
+    if (!hand || isHandOver(hand) || hand.toAct === null) return;
+    const seat = hand.toAct;
+    const bot = poker.seats[seat];
+    if (bot?.kind !== 'bot' || poker.handPlayers[seat]?.kind !== 'bot') return;
+    this.runLater(room, 'poker_bot_action', this.pokerBotDelayMs, async () => {
+      if (room.closed || poker.hand !== hand || isHandOver(hand) || hand.toAct !== seat || poker.seats[seat] !== bot) return;
+      const res = applyAction(hand, seat, chooseBotAction(hand, seat));
+      if (!res.ok) throw new Error(`computer player chose an illegal action: ${res.code}`);
+      if (isHandOver(hand)) await this.finishPokerHand(room);
+      room.version += 1;
+      this.onRoomUpdate?.(room);
+      this.scheduleBot(room);
+    });
+  }
+
+  /** Runs server-initiated work inside the room lock after a delay; failures go to onBackgroundError. */
+  private runLater(room: Room, task: BackgroundTask, delayMs: number, fn: () => Promise<void>): void {
+    const timer = setTimeout(() => {
+      room.lock.run(fn).catch((err: unknown) => {
+        try {
+          this.onBackgroundError(err, { roomId: room.id, task });
+        } catch {
+          // never let error reporting escape the timer
+        }
+      });
+    }, delayMs);
     timer.unref();
   }
 
