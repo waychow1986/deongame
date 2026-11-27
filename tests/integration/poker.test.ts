@@ -119,6 +119,14 @@ describe('poker hands (AC-14)', () => {
     expect(hu.toActSeat).toBe(seatOf(hu, u4).seat);
   });
 
+  it('starting a hand advances the room version so clients accept the new snapshot (TD-014)', async () => {
+    const [u1, u2] = [await user('pv1'), await user('pv2')];
+    const roomId = await table(u1, u2);
+    const before = (await u1.c.get<RoomBody>(`/api/rooms/${roomId}/state`)).body.room.version;
+    const res = await u1.c.post<RoomBody>(`/api/rooms/${roomId}/poker/start`);
+    expect(res.body.room.version).toBeGreaterThan(before);
+  });
+
   it('enforces turn, call, minimum bet/raise rules and ignores a duplicate call (TS-32, TS-33)', async () => {
     const [a, b] = [await user('a'), await user('b')];
     const roomId = await table(a, b);
@@ -221,6 +229,18 @@ describe('poker hands (AC-14)', () => {
       const won = v.winners.find((w) => w.seat === seatOf(v, p).seat)?.amount ?? 0;
       expect(rows[p.id]).toBe(won - 10);
       expect((await me(p)).chips).toBe(1000 + won - 10);
+    }
+  });
+
+  it('reports each showdown seat’s best five cards from its hole cards and the board (TS-32)', async () => {
+    const [a, b] = [await user('bc1'), await user('bc2')];
+    const roomId = await table(a, b);
+    const v = await checkDown([a, b], roomId, await start(a, roomId));
+    expect(v.stage).toBe('showdown');
+    for (const s of v.showdown) {
+      expect(s.bestCards).toHaveLength(5);
+      expect(new Set(s.bestCards).size).toBe(5);
+      for (const c of s.bestCards) expect([...s.holeCards, ...v.board]).toContain(c);
     }
   });
 

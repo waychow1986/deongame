@@ -1,5 +1,5 @@
 import { POKER_BIG_BLIND, POKER_HAND_COMMIT_CAP, POKER_SMALL_BLIND } from '../../shared/constants.js';
-import { HAND_LABELS, legalActions, potTotal } from '../../shared/poker/index.js';
+import { evaluateHand, HAND_LABELS, legalActions, potTotal } from '../../shared/poker/index.js';
 import type { ChessColor, ChessSquareView, PokerSeatView, PokerView, RoomSnapshot } from '../../shared/protocol.js';
 import { isInCheck, legalMoves } from '../../shared/xiangqi/index.js';
 import { COMPUTER_NAME, handActive, POKER_DEFAULT_CHIPS, roomStatus, type PokerTableState, type Room } from './roomManager.js';
@@ -147,6 +147,7 @@ function pokerView(poker: PokerTableState, viewerUserId: string): PokerView {
       holeCards: [...x.holeCards],
       handRank: x.handRank,
       handLabel: HAND_LABELS[x.handRank],
+      bestCards: evaluateHand([...x.holeCards, ...(hand?.board ?? [])]).best,
     })),
     winners: (hand?.winners ?? []).map((w) => ({ seat: w.seat, name: nameOf(w.seat), amount: w.amount })),
     you: {

@@ -32,7 +32,7 @@ test('德州扑克电脑玩家：房主添加电脑后与之开局，电脑自�
   await host.page.getByRole('button', { name: '添加电脑玩家' }).click();
   const botSeat = host.page.getByRole('region', { name: '座位 2：电脑 1' });
   await expect(botSeat).toContainText('电脑');
-  await expect(botSeat).toContainText('筹码：1000');
+  await expect(botSeat).toContainText('筹码 1000');
 
   await start.click();
   await expect(host.page.getByRole('status', { name: '底池' })).toHaveText('底池：15');

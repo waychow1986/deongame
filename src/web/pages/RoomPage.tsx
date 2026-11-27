@@ -118,6 +118,21 @@ function RoomView({ id }: { id: string }) {
     }
   }
 
+  async function pokerAction(type: 'fold' | 'check' | 'call' | 'bet' | 'raise', amount?: number) {
+    try {
+      const res = await api.pokerAction(id, type, amount);
+      setError(null);
+      push(res.room);
+    } catch (err) {
+      // A refused action means the table moved on: explain why and show the latest state (FR-084).
+      setError(errorMessage(err));
+      api
+        .roomState(id)
+        .then(({ room }) => push(room))
+        .catch(() => undefined);
+    }
+  }
+
   async function move(from: string, to: string) {
     try {
       const res = await api.chessMove(id, from, to);
@@ -208,7 +223,7 @@ function RoomView({ id }: { id: string }) {
               capacity={room.capacity}
               onStart={() => void act(() => api.pokerStart(id))}
               onAddBot={() => void act(() => api.addPokerBot(id))}
-              onAction={(type, amount) => void act(() => api.pokerAction(id, type, amount))}
+              onAction={(type, amount) => void pokerAction(type, amount)}
             />
           )}
         </>

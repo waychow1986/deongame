@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "stepId": "S42",
+  "result": "done",
+  "summary": "第 3 批（AC-21～AC-29 扑克牌桌界面、AC-34 手机竖屏）已实现：静态检查、类型检查与构建通过；单元测试 139 项（约 7 秒）、集成测试 54 项（约 4 秒）全部通过，其中新增 raise/seatLayout 单元测试与 bestCards 集成测试；复现测试“开始一手时房间版本前进”（pokerStart 未递增 room.version 导致界面丢弃开局快照）修改前失败、修改后通过；本批新写或改动的端到端用例 table、mobile、poker、ai 共 11 个在 chromium 与 mobile 两个项目各运行一次全部通过（各约 13 秒）；未改动的既有端到端用例未运行，验收标准交由 G3 独立测试在测试环境验证，镜像构建与测试环境部署未在会话中执行（由平台完成）。",
+  "asks": [],
+  "outputs": [
+    "src/shared/ui/raise.ts",
+    "src/shared/ui/seatLayout.ts",
+    "src/shared/protocol.ts",
+    "src/server/rooms/view.ts",
+    "src/server/rooms/roomManager.ts",
+    "src/web/components/SuitIcon.tsx",
+    "src/web/components/PlayingCard.tsx",
+    "src/web/components/PokerActionBar.tsx",
+    "src/web/components/PokerTable.tsx",
+    "src/web/anim/pokerAnim.ts",
+    "src/web/pages/RoomPage.tsx",
+    "src/web/styles.css",
+    "src/web/styles/poker.css",
+    "src/web/styles/chess.css",
+    "tests/unit/raise.test.ts",
+    "tests/unit/seatLayout.test.ts",
+    "tests/integration/poker.test.ts",
+    "e2e/support/poker.ts",
+    "e2e/table.spec.ts",
+    "e2e/mobile.spec.ts",
+    "e2e/poker.spec.ts",
+    "e2e/ai.spec.ts",
+    "docs/api.md"
+  ]
+}

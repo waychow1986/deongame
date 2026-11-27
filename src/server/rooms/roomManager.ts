@@ -420,6 +420,7 @@ export class RoomManager {
       if (seatedIndexes(poker).length < 2) throw new AppError('NOT_ENOUGH_PLAYERS');
       const hostSeat = poker.seats.findIndex((s) => s?.kind === 'human' && s.userId === room.hostUserId);
       await this.startPokerHand(room, poker.dealerSeat === null ? hostSeat : null);
+      room.version += 1;
       this.scheduleBot(room);
       return room;
     });

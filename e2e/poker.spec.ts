@@ -27,15 +27,17 @@ test('德州扑克：开局盲注与底牌私密、加注实时同步、弃牌�
 
   for (const u of [host, guest]) {
     await expect(u.page.getByRole('status', { name: '底池' })).toHaveText('底池：15');
-    await expect(u.page.getByRole('region', { name: '我的底牌' }).getByRole('img')).toHaveCount(2);
+    const mine = u.page.locator('[data-me="true"]');
+    await expect(mine.locator('[role="img"][data-card]')).toHaveCount(2);
   }
   const hostSeatForGuest = guest.page.getByRole('region', { name: `座位 1：${host.username}` });
-  await expect(hostSeatForGuest).toContainText('庄家');
-  await expect(hostSeatForGuest).toContainText('小盲');
-  await expect(hostSeatForGuest).toContainText('筹码：995');
-  await expect(hostSeatForGuest).toContainText('本手投入：5');
-  await expect(hostSeatForGuest.getByRole('img')).toHaveCount(0);
-  await expect(guest.page.getByRole('region', { name: `座位 2：${guest.username}` })).toContainText('大盲');
+  await expect(hostSeatForGuest.getByRole('img', { name: '庄家' })).toBeVisible();
+  await expect(hostSeatForGuest.getByRole('img', { name: '小盲' })).toBeVisible();
+  await expect(hostSeatForGuest).toContainText('筹码 995');
+  await expect(hostSeatForGuest).toContainText('本轮下注 5');
+  await expect(hostSeatForGuest.getByRole('img', { name: '牌背' })).toHaveCount(2);
+  await expect(hostSeatForGuest.locator('[data-card]')).toHaveCount(0);
+  await expect(guest.page.getByRole('region', { name: `座位 2：${guest.username}` }).getByRole('img', { name: '大盲' })).toBeVisible();
   await expect(guest.page.getByRole('log', { name: '牌局记录' })).toContainText(`${host.username} 小盲 5`);
 
   // Heads-up: the dealer (small blind) acts first preflop.
@@ -55,7 +57,7 @@ test('德州扑克：开局盲注与底牌私密、加注实时同步、弃牌�
   await expect.poll(() => chipsOf(guest.page)).toBe(990);
 
   // Next hand starts automatically with the dealer button moved to the guest.
-  await expect(host.page.getByRole('region', { name: `座位 2：${guest.username}` })).toContainText('庄家');
+  await expect(host.page.getByRole('region', { name: `座位 2：${guest.username}` }).getByRole('img', { name: '庄家' })).toBeVisible();
   await expect(host.page.getByRole('status', { name: '底池' })).toHaveText('底池：15');
   await expect(guest.page.getByRole('button', { name: '跟注 5' })).toBeEnabled();
   for (const u of [host, guest]) await u.context.close();

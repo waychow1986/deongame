@@ -322,7 +322,7 @@
 }
 
 .mute-button {
-  min-width: 40px;
+  min-width: 44px;
 }
 
 @media (prefers-reduced-motion: reduce) {

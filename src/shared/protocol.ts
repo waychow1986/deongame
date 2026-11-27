@@ -163,7 +163,8 @@ export interface PokerView {
   seats: PokerSeatView[];
   /** `amount` is what the action put in; `to` is the round total after a bet / raise. */
   actions: { seat: number; name: string; type: PokerLogType; amount: number; to?: number }[];
-  showdown: { seat: number; holeCards: string[]; handRank: PokerHandRank; handLabel: string }[];
+  /** `bestCards` are the five cards forming the seat's best hand (from hole cards and board). */
+  showdown: { seat: number; holeCards: string[]; handRank: PokerHandRank; handLabel: string; bestCards: string[] }[];
   winners: { seat: number; name: string; amount: number }[];
   you: { seat: number | null; legal: PokerLegalActions | null };
 }

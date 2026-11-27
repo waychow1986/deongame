@@ -69,7 +69,7 @@
   - 牌面为两位字符串：点数 `23456789TJQKA` + 花色 `s h d c`（如 `"Ah"`、`"Td"`）。
   - `seats[]`：`{seat, kind, userId?, name, chips, committedThisHand, committedThisRound, inHand, folded, atCap, waitingNextHand, isDealer, isSmallBlind, isBigBlind, holeCards?}`；`chips` 为扣除本手投入后的余额（可为负数）。`holeCards` 只对查看者本人的座位、以及摊牌时亮牌的座位出现，其他人的底牌不会出现在任何响应或推送中。
   - `actions[]`：`{seat, name, type: "small_blind"|"big_blind"|"fold"|"check"|"call"|"bet"|"raise"|"leave_fold", amount, to?}`；`to` 为下注/加注后的本轮总额。
-  - `showdown[]`：`{seat, holeCards, handRank, handLabel}`；`winners[]`：`{seat, name, amount}`（`amount` 为分得的底池）。
+  - `showdown[]`：`{seat, holeCards, handRank, handLabel, bestCards}`（`bestCards` 为该座位由底牌与公共牌组成的最佳 5 张牌，牌桌据此高亮赢家的牌）；`winners[]`：`{seat, name, amount}`（`amount` 为分得的底池）。
   - `you.legal`：只在轮到查看者时非空，`{fold, check, call, callAmount, bet, raise, minRaiseTo, maxRaiseTo}`。
 
 ### GET /api/rooms
