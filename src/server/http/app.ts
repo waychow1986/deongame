@@ -69,6 +69,11 @@ export async function createServer(opts: CreateServerOptions): Promise<RunningSe
           room.members.map((m) => m.userId),
         ),
       pokerNextHandDelayMs: config.pokerNextHandDelayMs,
+      onBackgroundError: (err, info) =>
+        logger.error(
+          { event: 'background_task_failed', task: info.task, roomId: info.roomId, err: (err as Error).message },
+          'background task failed',
+        ),
     }),
     broadcaster: broadcasterProxy,
   };

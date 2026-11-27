@@ -50,6 +50,8 @@ export interface RoomManagerOptions {
   /** Called after the server changed a poker room on its own (automatic next hand). */
   onPokerUpdate?: (room: Room) => void;
   pokerNextHandDelayMs?: number;
+  /** Reports a failure of work the server started on its own (e.g. the automatic next hand). */
+  onBackgroundError?: (err: unknown, info: { roomId: string; task: 'poker_next_hand' }) => void;
 }
 
 export interface PokerSeat {
@@ -103,8 +105,10 @@ export class RoomManager {
   private readonly onPokerSettled?: RoomManagerOptions['onPokerSettled'];
   private readonly onPokerUpdate?: (room: Room) => void;
   private readonly pokerNextHandDelayMs: number;
+  private readonly onBackgroundError: NonNullable<RoomManagerOptions['onBackgroundError']>;
 
   constructor(opts: RoomManagerOptions = {}) {
+    this.onBackgroundError = opts.onBackgroundError ?? (() => undefined);
     this.rng = opts.rng ?? cryptoRng;
     this.onChessFinished = opts.onChessFinished;
     this.loadChips = opts.loadChips ?? (async (ids) => new Map(ids.map((id) => [id, POKER_DEFAULT_CHIPS])));
@@ -372,14 +376,24 @@ export class RoomManager {
     const poker = room.poker as PokerTableState;
     poker.nextHandPending = true;
     const timer = setTimeout(() => {
-      void room.lock.run(async () => {
-        if (poker.hand?.id !== handId || !poker.nextHandPending) return;
-        poker.nextHandPending = false;
-        if (room.closed || seatedIndexes(poker).length < 2) return;
-        await this.startPokerHand(room, null);
-        room.version += 1;
-        this.onPokerUpdate?.(room);
-      });
+      room.lock
+        .run(async () => {
+          if (poker.hand?.id !== handId || !poker.nextHandPending) return;
+          poker.nextHandPending = false;
+          if (room.closed || seatedIndexes(poker).length < 2) return;
+          await this.startPokerHand(room, null);
+          room.version += 1;
+          this.onPokerUpdate?.(room);
+        })
+        // startPokerHand reads balances before changing any state, so on failure the table stays at the
+        // finished hand with nextHandPending cleared and the host can start the next hand manually.
+        .catch((err: unknown) => {
+          try {
+            this.onBackgroundError(err, { roomId: room.id, task: 'poker_next_hand' });
+          } catch {
+            // never let error reporting escape the timer
+          }
+        });
     }, this.pokerNextHandDelayMs);
     timer.unref();
   }

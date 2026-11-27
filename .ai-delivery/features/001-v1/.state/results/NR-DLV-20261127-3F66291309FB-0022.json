@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "stepId": "S26",
+  "result": "done",
+  "summary": "修复 S27 审查问题（自动下一手读库失败）：scheduleNextHand 现在显式捕获定时任务中的错误并经新增的 onBackgroundError 记录错误日志（event background_task_failed），牌桌停在上一手结束、房主可手动开始下一手（核实发现 AsyncMutex.run 已对返回的 Promise 挂了 catch，旧代码实际不会触发未处理拒绝致进程退出，但错误被静默吞掉、无日志）；实际运行：复现测试 tests/unit/pokerRoom.test.ts 新增 1 项修改前失败（未上报错误）、修改后通过，lint、typecheck、build 通过（约 10 秒），全量单元测试 78 项通过（约 1 秒），全量集成测试 39 项通过（约 3 秒）；本次未新写或改动端到端用例，既有端到端用例未运行（交由 G3 独立测试验证）。",
+  "asks": [],
+  "outputs": [
+    "src/server/rooms/roomManager.ts",
+    "src/server/http/app.ts",
+    "tests/unit/pokerRoom.test.ts"
+  ]
+}

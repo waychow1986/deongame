@@ -152,6 +152,33 @@ describe('poker room service', () => {
     expect(next.seats.find((s) => s.isDealer)?.seat).toBe(1);
   });
 
+  it('a DB failure when auto-starting the next hand is caught and logged; the host can start again', async () => {
+    const errors: { err: unknown; roomId: string }[] = [];
+    let failLoads = 0;
+    const rm = new RoomManager({
+      rng: seededRng(9),
+      pokerNextHandDelayMs: 0,
+      loadChips: async (ids) => {
+        if (failLoads > 0) {
+          failLoads -= 1;
+          throw new Error('connection reset');
+        }
+        return new Map(ids.map((id) => [id, 1000]));
+      },
+      onBackgroundError: (err, info) => errors.push({ err, roomId: info.roomId }),
+    });
+    const room = await table(rm, alice, bob);
+    await rm.pokerStart('a', room.id);
+    failLoads = 1;
+    await rm.pokerAction('a', room.id, { type: 'fold' });
+    await new Promise((r) => setTimeout(r, 30));
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({ roomId: room.id, err: { message: 'connection reset' } });
+    expect(viewFor(room, 'a').poker!).toMatchObject({ handNumber: 1, stage: 'complete' });
+    await rm.pokerStart('a', room.id);
+    expect(viewFor(room, 'a').poker!).toMatchObject({ handNumber: 2, stage: 'preflop' });
+  });
+
   it('a mid-hand joiner waits for the next hand; a leaver is folded and settled at −committed', async () => {
     const settled: Settled[] = [];
     const rm = manager({ settled });
