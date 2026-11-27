@@ -3,7 +3,10 @@ import tseslint from 'typescript-eslint';
 import globals from 'globals';
 
 export default tseslint.config(
-  { ignores: ['dist/**', 'node_modules/**', 'test-results/**', 'playwright-report/**'] },
+  {
+    // .ai-delivery/** holds delivery documents and the platform's independent test scripts, not product code.
+    ignores: ['dist/**', 'node_modules/**', 'test-results/**', 'playwright-report/**', '.ai-delivery/**'],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
