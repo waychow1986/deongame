@@ -130,6 +130,11 @@ describe('poker events to sounds (DC-02, AC-31)', () => {
     expect(diffPoker(start, next)).toEqual(['board', 'collect']);
     expect(soundsFor(diffPoker(start, next))).toEqual([]);
   });
+  it('a round closed by a check (pot unchanged) still collects the bets', () => {
+    const called = poker({ seats: [seat(0, 10), seat(1, 10)], pot: 20 });
+    const flop = poker({ board: ['As', 'Kd', '2c'], seats: [seat(0), seat(1)], pot: 20, stage: 'flop' });
+    expect(diffPoker(called, flop)).toEqual(['board', 'collect']);
+  });
   it('produces nothing when nothing changed', () => {
     expect(diffPoker(start, start)).toEqual([]);
     expect(diffPoker(null, start)).toEqual([]);

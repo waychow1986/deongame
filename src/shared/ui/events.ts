@@ -46,7 +46,7 @@ export function diffPoker(prev: PokerView | null | undefined, next: PokerView): 
   if (fresh.some((a) => BET_TYPES.has(a.type))) out.push('bet');
   if (fresh.some((a) => FOLD_TYPES.has(a.type))) out.push('fold');
   if (!newHand && next.board.length > prev.board.length) out.push('board');
-  if (!newHand && roundSum(prev) > 0 && roundSum(next) === 0 && next.pot > prev.pot) out.push('collect');
+  if (!newHand && roundSum(prev) > 0 && roundSum(next) === 0 && next.pot >= prev.pot) out.push('collect');
   if (prev.winners.length === 0 && next.winners.length > 0) out.push('win');
   return out;
 }

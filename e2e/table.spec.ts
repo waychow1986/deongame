@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
+import type { PokerView } from '../src/shared/protocol.js';
 import { actionArea, close, pokerRoom, pokerState, table } from './support/poker.js';
+import { newUser } from './support/users.js';
 
 type Box = { x: number; y: number; width: number; height: number };
 const center = (b: Box) => ({ x: b.x + b.width / 2, y: b.y + b.height / 2 });
@@ -148,7 +150,16 @@ test('摊牌：双方底牌翻开，高亮赢家的五张牌，显示牌型与�
   const [u1, u2] = players as [(typeof players)[0], (typeof players)[0]];
   await startHand(u1.page);
   const handNumber = (await pokerState(u1.page, roomId)).handNumber;
-  // The next hand starts shortly after the result, so record what the page shows the moment it appears.
+  // The action that ends the hand answers with the showdown snapshot (the next hand starts shortly after).
+  let final: PokerView | null = null;
+  for (const u of [u1, u2]) {
+    u.page.on('response', async (res) => {
+      if (!res.url().endsWith('/poker/action') || res.status() !== 200) return;
+      const p = ((await res.json()) as { room: { poker: PokerView } }).room.poker;
+      if (p.handNumber === handNumber && p.winners.length > 0) final = p;
+    });
+  }
+  // Record what the page shows the moment the result appears.
   await u1.page.evaluate(() => {
     const w = window as unknown as { __shown: unknown };
     const sample = () => {
@@ -158,6 +169,18 @@ test('摊牌：双方底牌翻开，高亮赢家的五张牌，显示牌型与�
           faces: document.querySelectorAll('[data-seat] [data-card]').length,
           highlighted: [...document.querySelectorAll('[data-highlight="true"]')].map((e) => e.getAttribute('data-card')),
           text: res.textContent ?? '',
+          cards: [...document.querySelectorAll('.poker-table [data-card]')].map((e) => {
+            const path = e.querySelector('svg.pc-suit path');
+            const rank = e.querySelector('.pc-rank');
+            return {
+              card: e.getAttribute('data-card'),
+              color: getComputedStyle(e).color,
+              suitFill: path ? getComputedStyle(path).fill : null,
+              suitSize: path ? path.getBoundingClientRect().width : 0,
+              rank: rank?.textContent ?? '',
+              rankColor: rank ? getComputedStyle(rank).color : null,
+            };
+          }),
         };
         return;
       }
@@ -190,10 +213,39 @@ test('摊牌：双方底牌翻开，高亮赢家的五张牌，显示牌型与�
     faces: number;
     highlighted: string[];
     text: string;
+    cards: { card: string; color: string; suitFill: string | null; suitSize: number; rank: string; rankColor: string | null }[];
   };
   expect(shown.faces).toBe(4);
-  expect(new Set(shown.highlighted).size).toBeGreaterThanOrEqual(5);
-  expect(shown.text).toMatch(/赢得 \d+/);
+
+  // AC-28: exactly the winners' best five cards are highlighted, and the hand name and amount are shown.
+  await expect.poll(() => final).not.toBeNull();
+  const result = final as unknown as PokerView;
+  const winnerSeats = new Set(result.winners.map((w) => w.seat));
+  const expected = new Set(result.showdown.filter((s) => winnerSeats.has(s.seat)).flatMap((s) => s.bestCards));
+  expect(expected.size).toBeGreaterThanOrEqual(5);
+  expect(new Set(shown.highlighted)).toEqual(expected);
+  for (const w of result.winners) {
+    const label = result.showdown.find((s) => s.seat === w.seat)?.handLabel as string;
+    expect(label).toBeTruthy();
+    expect(shown.text).toContain(`${w.name} ${label} 赢得 ${w.amount}`);
+  }
+
+  // AC-22: every face shows a suit graphic in the card's colour; hearts / diamonds red, spades / clubs dark.
+  expect(shown.cards).toHaveLength(9);
+  const rgb = (c: string | null) => (c?.match(/\d+/g) ?? []).slice(0, 3).map(Number) as [number, number, number];
+  for (const c of shown.cards) {
+    expect(c.suitSize, c.card).toBeGreaterThan(0);
+    expect(c.suitFill, c.card).toBe(c.color);
+    expect(c.rankColor, c.card).toBe(c.color);
+    expect(c.rank, c.card).toBe(c.card[0] === 'T' ? '10' : c.card[0]);
+    const [r, g, b] = rgb(c.color);
+    if (c.card[1] === 'h' || c.card[1] === 'd') {
+      expect(r - g, c.card).toBeGreaterThan(80);
+      expect(r - b, c.card).toBeGreaterThan(80);
+    } else {
+      expect(Math.max(r, g, b), c.card).toBeLessThanOrEqual(80);
+    }
+  }
   await close(players);
 });
 
@@ -224,5 +276,161 @@ test('动画：开始一手时牌桌进入发牌动画，底牌途经牌桌中�
     .poll(() => u1.page.evaluate(() => (window as unknown as { __anims: string[] }).__anims))
     .toContain('dealing');
   expect(await u1.page.evaluate(() => (window as unknown as { __midFrame: boolean }).__midFrame)).toBe(true);
+  await close(players);
+});
+
+test('动画：一轮下注结束时筹码推入底池，翻开公共牌时有翻牌过程', async ({ browser }) => {
+  const { players } = await pokerRoom(browser, ['tc1', 'tc2']);
+  const [u1, u2] = players as [(typeof players)[0], (typeof players)[0]];
+  await startHand(u1.page);
+  await expect(table(u1.page)).toHaveAttribute('data-anim', 'idle');
+  await u1.page.evaluate(() => {
+    const w = window as unknown as { __anims: string[]; __chipMid: boolean; __revealMid: boolean };
+    w.__anims = [];
+    w.__chipMid = false;
+    w.__revealMid = false;
+    const t = document.querySelector('.poker-table') as HTMLElement;
+    new MutationObserver(() => {
+      const a = t.getAttribute('data-anim');
+      if (a) w.__anims.push(a);
+    }).observe(t, { attributes: true, attributeFilter: ['data-anim'] });
+    const centre = (el: Element) => {
+      const r = el.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    };
+    const sample = () => {
+      const phase = t.getAttribute('data-anim');
+      if (phase === 'collecting') {
+        const pot = centre(t.querySelector('[data-pot-anchor]') as Element);
+        for (const chip of t.querySelectorAll('[data-flying-chip]')) {
+          const anchor = t.querySelector(`[data-bet-anchor="${chip.getAttribute('data-flying-chip')}"]`) as Element;
+          const from = centre(anchor);
+          const c = centre(chip);
+          if (Math.hypot(c.x - from.x, c.y - from.y) > 3 && Math.hypot(c.x - pot.x, c.y - pot.y) > 3) w.__chipMid = true;
+        }
+      }
+      if (phase === 'revealing') {
+        for (const c of t.querySelectorAll('[data-anim-card="board"]')) {
+          if (getComputedStyle(c).transform !== 'none') w.__revealMid = true;
+        }
+      }
+      requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  });
+
+  // Heads-up preflop: U1 (small blind) calls, U2 checks — the bets go to the pot and the flop is dealt.
+  await actionArea(u1.page).getByRole('button', { name: '跟注 5' }).click();
+  const bar2 = actionArea(u2.page);
+  await expect(bar2).toHaveAttribute('data-active', 'true');
+  await bar2.getByRole('button', { name: '过牌' }).click();
+
+  await expect
+    .poll(() => u1.page.evaluate(() => (window as unknown as { __anims: string[] }).__anims))
+    .toEqual(expect.arrayContaining(['collecting', 'revealing']));
+  await expect(table(u1.page)).toHaveAttribute('data-anim', 'idle');
+  const seen = await u1.page.evaluate(() => {
+    const w = window as unknown as { __anims: string[]; __chipMid: boolean; __revealMid: boolean };
+    return { anims: w.__anims, chipMid: w.__chipMid, revealMid: w.__revealMid };
+  });
+  expect(seen.anims.indexOf('collecting')).toBeLessThan(seen.anims.indexOf('revealing'));
+  expect(seen.chipMid).toBe(true);
+  expect(seen.revealMid).toBe(true);
+  await expect(table(u1.page).getByRole('region', { name: '公共牌' }).locator('[data-card]')).toHaveCount(3);
+  await close(players);
+});
+
+test('座位高亮与状态：轮到谁该座位在所有人页面高亮，弃牌与等待下一手', async ({ browser }) => {
+  const { players, roomId, roomPath } = await pokerRoom(browser, ['tq1', 'tq2', 'tq3']);
+  const pages = players.map((p) => p.page);
+  const host = pages[0] as Page;
+  await startHand(host);
+
+  const expectActing = async (on: Page[], acting: number) => {
+    const st = await pokerState(host, roomId);
+    for (const page of on) {
+      for (const s of st.seats) {
+        const seat = table(page).locator(`[data-seat="${s.seat}"]`);
+        await expect(seat).toHaveAttribute('data-acting', s.seat === acting ? 'true' : 'false');
+        if (s.seat === acting) await expect(seat).toContainText('行动中');
+      }
+    }
+  };
+  const ring = (page: Page, seat: number) =>
+    table(page)
+      .locator(`[data-seat="${seat}"] .seat-info`)
+      .evaluate((e) => `${getComputedStyle(e).borderColor} ${getComputedStyle(e).boxShadow}`);
+
+  const first = (await pokerState(host, roomId)).toActSeat as number;
+  await expectActing(pages, first);
+  const actingStyle = await ring(host, first);
+
+  // The player to act folds: the highlight moves on for everybody and the seat shows 弃牌.
+  const st = await pokerState(host, roomId);
+  const actor = players.find((p) => st.seats.find((s) => s.seat === first)?.name === p.username) as (typeof players)[0];
+  await actionArea(actor.page).getByRole('button', { name: '弃牌' }).click();
+  await expect.poll(async () => (await pokerState(host, roomId)).toActSeat).not.toBe(first);
+  const second = (await pokerState(host, roomId)).toActSeat as number;
+  expect(second).not.toBeNull();
+  await expectActing(pages, second);
+  for (const page of pages) await expect(table(page).locator(`[data-seat="${first}"]`)).toContainText('弃牌');
+  expect(await ring(host, first)).not.toBe(actingStyle);
+  expect(await ring(host, second)).toBe(actingStyle);
+
+  // A player joining mid-hand waits for the next hand.
+  const u4 = await newUser(browser, 'tq4');
+  expect((await u4.page.request.post(`/api/rooms/${roomId}/join`, { data: {} })).status()).toBe(200);
+  await u4.page.goto(roomPath);
+  await expect(table(u4.page)).toBeVisible();
+  const seat4 = (await pokerState(host, roomId)).seats.find((s) => s.name === u4.username)?.seat as number;
+  for (const page of [...pages, u4.page]) {
+    await expect(table(page).locator(`[data-seat="${seat4}"]`)).toContainText('等待下一手');
+  }
+  await close([...players, u4]);
+});
+
+test('座位筹码：余额为负时座位筹码为红色，非负时不是红色', async ({ browser }) => {
+  test.setTimeout(180_000);
+  const { players, roomId } = await pokerRoom(browser, ['tg1', 'tg2']);
+  const [u1] = players as [(typeof players)[0]];
+  await startHand(u1.page);
+  const balance = async (page: Page) =>
+    ((await (await page.request.get('/api/me')).json()) as { user: { chips: number } }).user.chips;
+
+  // Data through public play (design: 造数): whoever acts goes to the hand cap, the other calls.
+  let negative: (typeof players)[0] | undefined;
+  for (let i = 0; i < 300 && !negative; i++) {
+    const st = await pokerState(u1.page, roomId);
+    const actor = players.find((p) => st.seats.find((s) => s.seat === st.toActSeat)?.name === p.username);
+    const legal = actor ? (await pokerState(actor.page, roomId)).you.legal : null;
+    if (actor && legal) {
+      const data = legal.raise
+        ? { type: 'raise', amount: legal.maxRaiseTo }
+        : legal.bet
+          ? { type: 'bet', amount: legal.maxRaiseTo }
+          : legal.call
+            ? { type: 'call' }
+            : { type: 'check' };
+      await actor.page.request.post(`/api/rooms/${roomId}/poker/action`, { data });
+    } else {
+      await u1.page.waitForTimeout(100);
+    }
+    for (const p of players) if ((await balance(p.page)) < 0) negative = p;
+  }
+  expect(negative).toBeDefined();
+  const neg = negative as (typeof players)[0];
+  const other = players.find((p) => p !== neg) as (typeof players)[0];
+  expect(await balance(other.page)).toBeGreaterThanOrEqual(0);
+
+  for (const page of [neg.page, other.page]) {
+    const t = table(page);
+    const negChips = t.getByRole('region', { name: new RegExp(`：${neg.username}$`) }).locator('[data-negative]');
+    await expect(negChips).toHaveAttribute('data-negative', 'true');
+    await expect(negChips).toHaveText(/筹码 -\d+/);
+    await expect(negChips).toHaveCSS('color', 'rgb(214, 48, 49)');
+    const okChips = t.getByRole('region', { name: new RegExp(`：${other.username}$`) }).locator('[data-negative]');
+    await expect(okChips).toHaveAttribute('data-negative', 'false');
+    await expect(okChips).not.toHaveCSS('color', 'rgb(214, 48, 49)');
+  }
   await close(players);
 });
