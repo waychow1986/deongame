@@ -2,64 +2,12 @@
 @import './styles/base.css';
 @import './styles/auth.css';
 @import './styles/lobby.css';
+@import './styles/chess.css';
 
 /* Room pages (restyled in later batches). */
 h2.sub {
   font-size: 15px;
   margin: 0 0 6px;
-}
-
-.chess-board {
-  --board: min(100vw - 16px, 560px);
-  width: var(--board);
-  margin: 12px 0 12px calc(50% - var(--board) / 2);
-  display: grid;
-  grid-template-columns: repeat(9, 1fr);
-  background: #e8c98a;
-  border: 2px solid #7a5b25;
-  border-radius: 6px;
-}
-
-.chess-board .sq {
-  aspect-ratio: 1;
-  min-height: 0;
-  min-width: 0;
-  padding: 0;
-  border-radius: 0;
-  background: transparent;
-  border: 1px solid rgba(122, 91, 37, 0.35);
-  color: #222;
-  font-size: clamp(14px, 4.6vw, 26px);
-  font-weight: 600;
-  box-shadow: none;
-}
-
-.chess-board .sq.piece {
-  border-radius: 50%;
-  background: #fbf3e0;
-  border: 2px solid currentColor;
-}
-
-.chess-board .sq.red {
-  color: #b3261e;
-}
-
-.chess-board .sq.black {
-  color: #222;
-}
-
-.chess-board .sq.covered {
-  background: #6b5b45;
-  color: #fff;
-  border-color: #3d3326;
-}
-
-.chess-board .sq.last {
-  box-shadow: inset 0 0 0 3px #2a7de1;
-}
-
-.chess-board .sq[aria-pressed='true'] {
-  box-shadow: 0 0 0 3px #2a7de1;
 }
 
 .seats {

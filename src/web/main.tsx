@@ -4,7 +4,10 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import { AuthPage } from './pages/AuthPage.js';
 import { LobbyPage } from './pages/LobbyPage.js';
 import { RoomPage } from './pages/RoomPage.js';
+import { installAudioUnlock } from './audio/sound.js';
 import './styles.css';
+
+installAudioUnlock();
 
 function App() {
   return (

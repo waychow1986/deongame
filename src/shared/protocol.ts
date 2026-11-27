@@ -71,6 +71,11 @@ export interface ChessView {
   yourColor: ChessColor | null;
   turn: ChessColor;
   inCheck: boolean;
+  /**
+   * Legal targets per own piece for the viewer; only while the game is active and it is the viewer's turn,
+   * otherwise null. Covered pieces move as the opening piece of their square (FR-040).
+   */
+  legalMoves: Record<string, string[]> | null;
   /** Occupied squares only; covered pieces are always `hidden`, for every viewer. */
   board: ChessSquareView[];
   captured: { side: ChessColor; piece: ChessPieceType }[];

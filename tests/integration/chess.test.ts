@@ -236,4 +236,23 @@ describe('online chess (AC-6, AC-7, AC-8, AC-9, AC-10)', () => {
       await black.post(`/api/rooms/${roomId}/leave`);
     }
   });
+
+  it('gives legalMoves only to the side to move, matching what the move API accepts (AC-16)', async () => {
+    const { red, black, roomId, base } = await game();
+    try {
+      const r = (await red.get<RoomBody>(`/api/rooms/${roomId}/state`)).body.room.chess as ChessView;
+      const b = (await black.get<RoomBody>(`/api/rooms/${roomId}/state`)).body.room.chess as ChessView;
+      expect(b.legalMoves).toBeNull();
+      expect(r.legalMoves?.a3).toEqual(['a4']);
+      expect(r.legalMoves?.a0?.sort()).toEqual(['a1', 'a2']);
+      expect(Object.keys(r.legalMoves ?? {}).every((p) => r.board.find((s) => s.pos === p)?.side === 'red')).toBe(true);
+      const moved = await red.post<RoomBody>(`${base}/move`, { from: 'a3', to: 'a4' });
+      expect(moved.body.room.chess?.legalMoves).toBeNull();
+      const bAfter = (await black.get<RoomBody>(`/api/rooms/${roomId}/state`)).body.room.chess as ChessView;
+      expect(bAfter.legalMoves?.a6).toEqual(['a5']);
+    } finally {
+      await red.post(`/api/rooms/${roomId}/leave`);
+      await black.post(`/api/rooms/${roomId}/leave`);
+    }
+  });
 });

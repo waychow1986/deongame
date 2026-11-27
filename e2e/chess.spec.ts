@@ -47,20 +47,20 @@ test('联机揭棋：走棋实时同步、拒绝提和、认输后双方看到�
   await expect(redResult).toContainText('你输了');
   await expect(redResult).toContainText('认输');
   await expect(redResult).toContainText('积分变化：-10');
-  await expect(redResult).toContainText('当前积分：990');
+  await expect(redResult).toContainText('最新积分 990');
   const blackResult = black.page.getByRole('dialog', { name: '对局结果' });
   await expect(blackResult).toContainText('你赢了');
   await expect(blackResult).toContainText('积分变化：+10');
-  await expect(blackResult).toContainText('当前积分：1010');
+  await expect(blackResult).toContainText('最新积分 1010');
 
-  await blackResult.getByRole('button', { name: '返回大厅' }).click();
+  await blackResult.getByRole('button', { name: '回到大厅' }).click();
   await expect(black.page.getByRole('heading', { name: '游戏大厅' })).toBeVisible();
-  await redResult.getByRole('button', { name: '返回大厅' }).click();
+  await redResult.getByRole('button', { name: '回到大厅' }).click();
   await expect(red.page.getByRole('heading', { name: '游戏大厅' })).toBeVisible();
   for (const u of [red, black]) await u.context.close();
 });
 
-test('手机视口：棋盘完整显示无横向滚动，黑方视角旋转且可走棋，不合规走法被拒', async ({ browser }, testInfo) => {
+test('手机视口：棋盘完整显示无横向滚动，黑方视角旋转且可走棋，不能走的位置给出提示', async ({ browser }, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile', '只在手机项目运行');
   const { red, black } = await startGame(browser);
   const noHorizontalScroll = (page: Page) =>
@@ -75,7 +75,7 @@ test('手机视口：棋盘完整显示无横向滚动，黑方视角旋转且�
 
   await board(red.page).getByRole('button', { name: 'a0 红暗子' }).click();
   await board(red.page).getByRole('button', { name: 'a4 空' }).click();
-  await expect(red.page.getByRole('alert')).toContainText('走法不合规');
+  await expect(red.page.getByRole('status', { name: '操作提示' })).toContainText('这里不能走');
   await expect(board(red.page).getByRole('button', { name: 'a0 红暗子' })).toBeVisible();
 
   await board(red.page).getByRole('button', { name: 'e3 红暗子' }).click();
@@ -89,6 +89,6 @@ test('手机视口：棋盘完整显示无横向滚动，黑方视角旋转且�
 
   await leaveRoomConfirmed(black.page);
   await expect(red.page.getByRole('dialog', { name: '对局结果' })).toContainText('你赢了');
-  await red.page.getByRole('dialog', { name: '对局结果' }).getByRole('button', { name: '返回大厅' }).click();
+  await red.page.getByRole('dialog', { name: '对局结果' }).getByRole('button', { name: '回到大厅' }).click();
   for (const u of [red, black]) await u.context.close();
 });

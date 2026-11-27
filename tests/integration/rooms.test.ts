@@ -217,4 +217,36 @@ describe('rooms (AC-4, AC-5)', () => {
     await alice.post(`/api/rooms/${roomId}/leave`);
     expect((await alice.get<{ user: { currentRoomId: null } }>('/api/me')).body.user.currentRoomId).toBeNull();
   });
+
+  it('a finished chess game no longer blocks opening or joining another room (implicit release, Q2)', async () => {
+    const red = await user('pr');
+    const black = await user('pb');
+    const other = await user('po');
+    const { roomId } = (await red.post<RoomBody>('/api/rooms', { game: 'chess' })).body.room;
+    await black.post(`/api/rooms/${roomId}/join`);
+    expect((await black.post(`/api/rooms/${roomId}/chess/resign`)).status).toBe(200);
+
+    // Red plays again online: a new waiting room with the same settings, black is not pulled in.
+    const again = await red.post<RoomBody>('/api/rooms', { game: 'chess' });
+    expect(again.status).toBe(201);
+    expect(again.body.room).toMatchObject({ game: 'chess', status: 'waiting', capacity: 2 });
+    expect(again.body.room.members.map((m) => m.username)).toEqual([red.name]);
+    expect((await red.get<{ user: { currentRoomId: string } }>('/api/me')).body.user.currentRoomId).toBe(again.body.room.roomId);
+
+    // Black, still on the result screen of the old game, can join the new room.
+    const joined = await black.post<RoomBody>(`/api/rooms/${again.body.room.roomId}/join`);
+    expect(joined.status).toBe(200);
+    expect(joined.body.room.chess?.status).toBe('active');
+    expect((await black.get<RoomBody>(`/api/rooms/${roomId}/state`)).status).toBe(404);
+
+    // An AI game can be started straight after a finished game, too.
+    const ai = await other.post<RoomBody>('/api/chess/ai-games', {});
+    await other.post(`/api/rooms/${ai.body.room.roomId}/chess/resign`);
+    const ai2 = await other.post<RoomBody>('/api/chess/ai-games', {});
+    expect(ai2.status).toBe(201);
+    expect(ai2.body.room.chess).toMatchObject({ status: 'active', yourColor: 'red', captured: [] });
+
+    for (const c of [red, black]) await c.post(`/api/rooms/${again.body.room.roomId}/leave`);
+    await other.post(`/api/rooms/${ai2.body.room.roomId}/leave`);
+  });
 });

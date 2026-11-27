@@ -82,6 +82,7 @@
 
 - `201 { room: RoomSnapshot }`。
 - `400 VALIDATION_FAILED`（`capacity` 不是 2～9 的整数时消息为 `人数上限必须是 2～9 的整数`）、`409 ALREADY_IN_ROOM`（同一时间只能在一个房间）。
+- 隐式释放：用户仍留在一个已结束的象棋对局房间（结果画面）时，创建房间、创建人机对局（`POST /api/chess/ai-games`）与加入房间会先让其离开该房间（不再计分；其余成员收到 `room:state`，房间无人即关闭），用于“再来一局”和结束后直接加入别的房间。
 
 ### POST /api/rooms/:id/join
 
@@ -101,6 +102,8 @@
 - `POST /api/rooms/:id/chess/resign`：认输，对方胜。
 - `POST /api/rooms/:id/chess/draw-offer`：提和；同时只能有一个待回应的提和（`409 DRAW_OFFER_PENDING`）。
 - `POST /api/rooms/:id/chess/draw-response`，请求 `{ "accept": true|false }`：只有被提和的一方可回应（`409 NO_DRAW_OFFER`）；同意即和棋。
+
+房间快照中的 `chess.legalMoves`：仅当对局进行中且轮到请求者走时为 `{ [from]: to[] }`（只含有合规着法的己方棋子，盖棋按开局位置的棋子走法，与 `move` 的判定一致），其他情况（对方回合、观看者、等待中、已结束）为 `null`。前端选子后的可走位置只取自该字段。
 
 对局结束（将死或困毙判负、认输、离开即认输、同意和棋、双方只剩将帅自动和棋）时在房间锁内写库结算：胜 +10、负 −10、和 0，每局只结算一次。结束后房间从大厅移除，成员仍留在房间内直至“返回大厅”（调用 leave）；离开已结束的对局不再计分。
 

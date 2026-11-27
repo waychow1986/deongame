@@ -179,6 +179,7 @@ export class RoomManager {
 
   create(user: Member, game: GameType, capacity?: number): Promise<Room> {
     return this.globalLock.run(async () => {
+      await this.releaseFinished(user.userId);
       if (this.userRoom.has(user.userId)) throw new AppError('ALREADY_IN_ROOM');
       const room: Room = {
         id: randomUUID(),
@@ -230,7 +231,8 @@ export class RoomManager {
 
   /** Starts a chess game against the computer: unlisted, the user plays red and moves first (FR-064). */
   createAiGame(user: Member): Promise<Room> {
-    return this.globalLock.run(() => {
+    return this.globalLock.run(async () => {
+      await this.releaseFinished(user.userId);
       if (this.userRoom.has(user.userId)) throw new AppError('ALREADY_IN_ROOM');
       const room: Room = {
         id: randomUUID(),
@@ -265,8 +267,9 @@ export class RoomManager {
   }
 
   join(user: Member, roomId: string): Promise<Room> {
-    return this.globalLock.run(() =>
-      this.withRoom(roomId, async (room) => {
+    return this.globalLock.run(async () => {
+      await this.releaseFinished(user.userId, roomId);
+      return this.withRoom(roomId, async (room) => {
         if (room.members.some((m) => m.userId === user.userId)) return room;
         if (this.userRoom.has(user.userId)) throw new AppError('ALREADY_IN_ROOM');
         if (room.closed || !room.listed) throw new AppError('ROOM_NOT_FOUND');
@@ -292,8 +295,32 @@ export class RoomManager {
         }
         room.version += 1;
         return room;
-      }),
-    );
+      });
+    });
+  }
+
+  /**
+   * Implicit release (TD-006): a user whose room is already closed (finished chess game) leaves it when
+   * opening or joining another room, so "再来一局" and joining from the lobby work after a game.
+   * Must run inside the global lock and before any other room lock is taken.
+   */
+  private async releaseFinished(userId: string, exceptRoomId?: string): Promise<void> {
+    const oldId = this.userRoom.get(userId);
+    if (!oldId || oldId === exceptRoomId) return;
+    const old = this.rooms.get(oldId);
+    if (!old) {
+      this.userRoom.delete(userId);
+      return;
+    }
+    if (!old.closed) return;
+    await old.lock.run(() => {
+      old.members = old.members.filter((m) => m.userId !== userId);
+      this.userRoom.delete(userId);
+      if (old.hostUserId === userId && old.members[0]) old.hostUserId = old.members[0].userId;
+      if (old.members.length === 0) this.rooms.delete(old.id);
+      old.version += 1;
+    });
+    if (old.members.length > 0) this.onRoomUpdate?.(old);
   }
 
   /** Removes the user from their room. Returns the room and the users who should receive an update. */

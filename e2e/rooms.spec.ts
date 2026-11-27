@@ -40,8 +40,9 @@ test('开象棋房间，另一用户在大厅看到并加入，第三人看到�
 
   await leaveRoomConfirmed(bob.page);
   await expect(bob.page.getByRole('heading', { name: '游戏大厅' })).toBeVisible();
-  await expect(alice.page.getByRole('button', { name: '返回大厅' })).toBeVisible();
-  await alice.page.getByRole('button', { name: '返回大厅' }).click();
+  const aliceResult = alice.page.getByRole('dialog', { name: '对局结果' });
+  await expect(aliceResult.getByRole('button', { name: '回到大厅' })).toBeVisible();
+  await aliceResult.getByRole('button', { name: '回到大厅' }).click();
   await expect(alice.page.getByRole('heading', { name: '游戏大厅' })).toBeVisible();
 
   // The lobby list refreshes itself (TD-004), so no manual refresh is needed.
