@@ -81,6 +81,8 @@ test('手机视口：棋盘完整显示无横向滚动，黑方视角旋转且�
   await board(red.page).getByRole('button', { name: 'e3 红暗子' }).click();
   await board(red.page).getByRole('button', { name: 'e4 空' }).click();
   await expect(black.page.getByRole('status', { name: '对局状态' })).toContainText('轮到你走棋');
+  // The board ignores taps while red's move is animated (TD-013); wait until it is idle.
+  await expect(board(black.page)).toHaveAttribute('data-anim', 'idle');
   await board(black.page).getByRole('button', { name: 'e6 黑暗子' }).click();
   await board(black.page).getByRole('button', { name: 'e5 空' }).click();
   await expect(red.page.getByRole('status', { name: '对局状态' })).toContainText('轮到你走棋');

@@ -84,8 +84,9 @@ export function ChessBoard({ chess, animate, onMove, onAnimDone, onHint }: Props
   const mine = (pos: string) => chess.yourColor !== null && byPos.get(pos)?.side === chess.yourColor;
   const canAct = chess.status === 'active' && chess.yourColor !== null && chess.turn === chess.yourColor;
   const targets = new Set(selected ? (chess.legalMoves?.[selected] ?? []) : []);
-  // Taps stay live during an animation (the snapshot is already current); dots appear once it ends.
-  const showTargets = phase === 'idle';
+  // While an animation runs the board is busy and ignores taps (TD-013); dots are shown only when idle.
+  const busy = phase !== 'idle';
+  const showTargets = !busy;
 
   // Drop a selection that is no longer one of my pieces on my turn.
   const stale = selected !== null && (!canAct || !mine(selected));
@@ -169,7 +170,7 @@ export function ChessBoard({ chess, animate, onMove, onAnimDone, onHint }: Props
   }, [run]);
 
   function click(pos: string) {
-    if (chess.status !== 'active' || chess.yourColor === null) return;
+    if (busy || chess.status !== 'active' || chess.yourColor === null) return;
     if (!canAct) {
       onHint('还没轮到你');
       return;
@@ -191,7 +192,6 @@ export function ChessBoard({ chess, animate, onMove, onAnimDone, onHint }: Props
     onMove(selected, pos);
   }
 
-  const busy = phase !== 'idle';
   return (
     <div
       role="group"

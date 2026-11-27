@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "stepId": "S40",
+  "result": "done",
+  "summary": "修复 S41 两项审查问题：棋盘在 data-anim 非 idle 时按 TD-013 忽略点按（手机端到端用例改为先等棋盘回到 idle 再点按），并在 board.spec 中补充 AC-12/13/14/15 的几何与颜色断言（翻开、暗子、黑方视角及 5 种视口下棋子中心与网格线相对交叉点≤2px、宽高比 0.9、红黑字色、红黑暗子背面差≥60）——几何断言暴露棋盘 3px 边框使棋子偏离约定 2.7px，已改为阴影边框，并给暗子背面补底色；实际运行：复现测试（board.spec 新增的动画忙碌用例与补充断言的 2 个用例）修改前 3 项失败（约 23 秒）、修改后通过，board.spec 与 chess.spec 在 chromium 与 mobile 项目共 7 项通过（约 13 秒，5 项按项目跳过）、board.spec chromium 重复 3 次 9 项通过（约 18 秒），lint、typecheck、build 通过，全量单元测试 13 个文件 128 项通过（约 7 秒），全量集成测试 6 个文件 52 项通过（约 4 秒）；未改动的既有端到端用例（ai、lobby、poker、rooms、auth）未在会话中运行，交由 G3 独立测试验证。",
+  "asks": [],
+  "outputs": [
+    "src/web/components/ChessBoard.tsx",
+    "src/web/styles/chess.css",
+    "e2e/board.spec.ts",
+    "e2e/chess.spec.ts"
+  ]
+}

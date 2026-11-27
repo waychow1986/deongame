@@ -19,8 +19,9 @@
   max-width: 100%;
   margin: 0 auto;
   border-radius: 8px;
-  border: 3px solid #7a4e1d;
+  /* The frame is a shadow, not a border, so the box stays exactly the 9×10 grid (design geometry contract). */
   box-shadow:
+    0 0 0 3px #7a4e1d,
     0 6px 18px rgba(60, 35, 10, 0.35),
     inset 0 0 24px rgba(90, 50, 10, 0.25);
   background:
@@ -167,7 +168,7 @@
 }
 
 .xq-piece.back.red {
-  background: radial-gradient(circle at 35% 30%, #e0543e 0%, #b8321f 60%, #8c2112 100%);
+  background: radial-gradient(circle at 35% 30%, #e0543e 0%, #b8321f 60%, #8c2112 100%) #b8321f;
   outline: 2px solid #d4a437;
   outline-offset: -6px;
 }
@@ -181,7 +182,7 @@
 }
 
 .xq-piece.back.black {
-  background: radial-gradient(circle at 35% 30%, #4a5d7a 0%, #2b3a52 60%, #1a2436 100%);
+  background: radial-gradient(circle at 35% 30%, #4a5d7a 0%, #2b3a52 60%, #1a2436 100%) #2b3a52;
   outline: 2px solid #c9ced6;
   outline-offset: -6px;
 }
