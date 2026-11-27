@@ -1,11 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
+import { leaveRoomConfirmed, openRoomViaDialog } from './support/lobby.js';
 import { newUser } from './support/users.js';
 
 async function startGame(browser: Parameters<typeof newUser>[0]) {
   const red = await newUser(browser, 'cred');
   const black = await newUser(browser, 'cblack');
   await red.page.goto('/lobby');
-  await red.page.getByRole('button', { name: '开中国象棋房间' }).click();
+  await openRoomViaDialog(red.page, { game: 'chess' });
   await expect(red.page.getByRole('heading', { name: '中国象棋房间' })).toBeVisible();
   const roomPath = new URL(red.page.url()).pathname;
   const roomId = roomPath.split('/').pop() as string;
@@ -86,7 +87,7 @@ test('手机视口：棋盘完整显示无横向滚动，黑方视角旋转且�
   await expect(board(red.page).getByRole('button', { name: /^e5 黑/ })).toBeVisible();
   expect(await noHorizontalScroll(red.page)).toBe(true);
 
-  await black.page.getByRole('button', { name: '离开房间' }).click();
+  await leaveRoomConfirmed(black.page);
   await expect(red.page.getByRole('dialog', { name: '对局结果' })).toContainText('你赢了');
   await red.page.getByRole('dialog', { name: '对局结果' }).getByRole('button', { name: '返回大厅' }).click();
   for (const u of [red, black]) await u.context.close();

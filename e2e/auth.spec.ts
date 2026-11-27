@@ -10,9 +10,9 @@ test('注册后进入大厅，换浏览器用同一账号登录', async ({ page,
 
   await expect(page.getByRole('heading', { name: '游戏大厅' })).toBeVisible();
   const info = page.getByRole('region', { name: '我的信息' });
-  await expect(info).toContainText(`用户名：${username}`);
-  await expect(info).toContainText('积分：1000');
-  await expect(info).toContainText('筹码：1000');
+  await expect(info).toContainText(username);
+  await expect(info).toContainText('象棋积分 1000');
+  await expect(info).toContainText('扑克筹码 1000');
 
   const other = await browser.newContext();
   const page2 = await other.newPage();
@@ -24,7 +24,7 @@ test('注册后进入大厅，换浏览器用同一账号登录', async ({ page,
 
   await page2.getByLabel('密码').fill('pw-123456');
   await page2.getByRole('button', { name: '登录' }).click();
-  await expect(page2.getByRole('region', { name: '我的信息' })).toContainText(`用户名：${username}`);
+  await expect(page2.getByRole('region', { name: '我的信息' })).toContainText(username);
   await other.close();
 });
 

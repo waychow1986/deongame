@@ -1,10 +1,11 @@
 import { expect, test } from '@playwright/test';
+import { openRoomViaDialog } from './support/lobby.js';
 import { newUser } from './support/users.js';
 
 test('与电脑下盲棋：创建即开局，用户走棋后电脑自动应着', async ({ browser }) => {
   const u = await newUser(browser, 'aichess');
   await u.page.goto('/lobby');
-  await u.page.getByRole('button', { name: '与电脑下盲棋' }).click();
+  await openRoomViaDialog(u.page, { game: 'chess', mode: 'ai' });
   await expect(u.page.getByRole('heading', { name: '与电脑对战' })).toBeVisible();
   const status = u.page.getByRole('status', { name: '对局状态' });
   await expect(status).toContainText('轮到你走棋');
@@ -23,7 +24,7 @@ test('与电脑下盲棋：创建即开局，用户走棋后电脑自动应着',
 test('德州扑克电脑玩家：房主添加电脑后与之开局，电脑自动行动', async ({ browser }) => {
   const host = await newUser(browser, 'pbot');
   await host.page.goto('/lobby');
-  await host.page.getByRole('button', { name: '开德州扑克房间' }).click();
+  await openRoomViaDialog(host.page, { game: 'poker' });
   await expect(host.page.getByRole('heading', { name: '德州扑克房间' })).toBeVisible();
 
   const start = host.page.getByRole('button', { name: '开始牌局' });

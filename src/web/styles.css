@@ -1,118 +1,9 @@
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
+@import './styles/tokens.css';
+@import './styles/base.css';
+@import './styles/auth.css';
+@import './styles/lobby.css';
 
-html,
-body {
-  margin: 0;
-  padding: 0;
-  overflow-x: hidden;
-  font-family: system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  background: #f5f3ee;
-  color: #222;
-}
-
-.page {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 16px;
-}
-
-.page.narrow {
-  max-width: 420px;
-}
-
-.stack {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-input {
-  font-size: 16px;
-  padding: 10px;
-  border: 1px solid #bbb;
-  border-radius: 6px;
-  width: 100%;
-}
-
-button {
-  font-size: 16px;
-  min-height: 44px;
-  padding: 8px 14px;
-  border: none;
-  border-radius: 6px;
-  background: #a33;
-  color: #fff;
-  cursor: pointer;
-}
-
-button:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 12px 0;
-}
-
-.card {
-  background: #fff;
-  border-radius: 8px;
-  padding: 12px;
-  margin: 12px 0;
-}
-
-.info {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 16px;
-}
-
-.error {
-  color: #b00020;
-  background: #fdecea;
-  border-radius: 6px;
-  padding: 8px 10px;
-}
-
-.muted {
-  color: #777;
-}
-
-.table-wrap {
-  width: 100%;
-  overflow-x: auto;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  background: #fff;
-}
-
-th,
-td {
-  text-align: left;
-  padding: 8px 6px;
-  border-bottom: 1px solid #eee;
-  white-space: nowrap;
-}
-
+/* Room pages (restyled in later batches). */
 h2.sub {
   font-size: 15px;
   margin: 0 0 6px;
@@ -140,6 +31,7 @@ h2.sub {
   color: #222;
   font-size: clamp(14px, 4.6vw, 26px);
   font-weight: 600;
+  box-shadow: none;
 }
 
 .chess-board .sq.piece {
@@ -168,32 +60,6 @@ h2.sub {
 
 .chess-board .sq[aria-pressed='true'] {
   box-shadow: 0 0 0 3px #2a7de1;
-}
-
-.dialog-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-}
-
-.dialog {
-  width: min(100%, 360px);
-  text-align: center;
-}
-
-@media (max-width: 480px) {
-  th,
-  td {
-    padding: 6px 4px;
-    font-size: 14px;
-  }
-  button {
-    padding: 8px 10px;
-  }
 }
 
 .seats {

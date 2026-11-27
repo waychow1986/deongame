@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openRoomViaDialog } from './support/lobby.js';
 import { newUser } from './support/users.js';
 
 async function chipsOf(page: Page): Promise<number> {
@@ -10,7 +11,7 @@ test('德州扑克：开局盲注与底牌私密、加注实时同步、弃牌�
   const host = await newUser(browser, 'phost');
   const guest = await newUser(browser, 'pguest');
   await host.page.goto('/lobby');
-  await host.page.getByRole('button', { name: '开德州扑克房间' }).click();
+  await openRoomViaDialog(host.page, { game: 'poker' });
   await expect(host.page.getByRole('heading', { name: '德州扑克房间' })).toBeVisible();
   const roomPath = new URL(host.page.url()).pathname;
   const roomId = roomPath.split('/').pop() as string;

@@ -23,6 +23,15 @@ export class SessionStore {
     return { token, expiresAt };
   }
 
+  /** Deletes the session for the token; returns its user id when one existed. */
+  async revoke(token: string | undefined): Promise<string | null> {
+    if (!token || token.length > 200) return null;
+    const res = await this.pool.query<{ user_id: string }>('DELETE FROM sessions WHERE token_hash = $1 RETURNING user_id', [
+      hashToken(token),
+    ]);
+    return res.rows[0]?.user_id ?? null;
+  }
+
   /** Returns the user id for a valid token; renews the session when it is close to expiry. */
   async resolve(token: string | undefined): Promise<{ userId: string; renewedUntil: Date | null } | null> {
     if (!token || token.length > 200) return null;

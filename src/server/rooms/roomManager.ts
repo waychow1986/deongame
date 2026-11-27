@@ -150,6 +150,14 @@ export class RoomManager {
     return this.userRoom.get(userId) ?? null;
   }
 
+  /** The room holding the user's unfinished game, or null when there is none (TD-002). */
+  activeRoomId(userId: string): string | null {
+    const roomId = this.userRoom.get(userId);
+    if (!roomId) return null;
+    const room = this.rooms.get(roomId);
+    return room && !room.closed ? roomId : null;
+  }
+
   list(): RoomListItem[] {
     return [...this.rooms.values()]
       .filter((r) => r.listed && !r.closed)
@@ -169,7 +177,7 @@ export class RoomManager {
       });
   }
 
-  create(user: Member, game: GameType): Promise<Room> {
+  create(user: Member, game: GameType, capacity?: number): Promise<Room> {
     return this.globalLock.run(async () => {
       if (this.userRoom.has(user.userId)) throw new AppError('ALREADY_IN_ROOM');
       const room: Room = {
@@ -178,7 +186,7 @@ export class RoomManager {
         mode: 'online',
         hostUserId: user.userId,
         members: [{ ...user }],
-        capacity: game === 'chess' ? CHESS_CAPACITY : POKER_CAPACITY,
+        capacity: game === 'chess' ? CHESS_CAPACITY : (capacity ?? POKER_CAPACITY),
         createdAt: Date.now() + this.rooms.size / 1000,
         version: 1,
         listed: true,
@@ -264,7 +272,7 @@ export class RoomManager {
         if (room.closed || !room.listed) throw new AppError('ROOM_NOT_FOUND');
         if (occupiedCount(room) >= room.capacity) throw new AppError('ROOM_FULL');
         if (room.chess && room.chess.status !== 'waiting') throw new AppError('ROOM_FULL');
-        const freeSeat = room.poker ? pickFreeSeat(room.poker) : -1;
+        const freeSeat = room.poker ? pickFreeSeat(room.poker, room.capacity) : -1;
         if (room.poker && freeSeat < 0) throw new AppError('ROOM_FULL');
         if (room.poker) await this.refreshBalances(room.poker, [user.userId]);
         room.members.push({ ...user });
@@ -366,7 +374,8 @@ export class RoomManager {
         const poker = requirePokerMember(room, userId);
         if (room.hostUserId !== userId) throw new AppError('NOT_HOST');
         if (handActive(poker) || poker.nextHandPending) throw new AppError('HAND_IN_PROGRESS');
-        const seat = pickFreeSeat(poker);
+        if (occupiedCount(room) >= room.capacity) throw new AppError('ROOM_FULL');
+        const seat = pickFreeSeat(poker, room.capacity);
         if (seat < 0) throw new AppError('ROOM_FULL');
         poker.botCounter += 1;
         poker.seats[seat] = { kind: 'bot', name: `${COMPUTER_NAME} ${poker.botCounter}`, chips: POKER_DEFAULT_CHIPS };
@@ -621,8 +630,8 @@ function nextSeatAfter(seats: number[], after: number): number {
 }
 
 /** Prefers seats that are not part of the running hand so a newcomer never inherits a hand seat. */
-function pickFreeSeat(poker: PokerTableState): number {
-  const free = poker.seats.flatMap((s, i) => (s === null ? [i] : []));
+function pickFreeSeat(poker: PokerTableState, capacity: number): number {
+  const free = poker.seats.flatMap((s, i) => (s === null && i < capacity ? [i] : []));
   if (handActive(poker)) {
     const fresh = free.find((i) => !(i in poker.handPlayers));
     if (fresh !== undefined) return fresh;

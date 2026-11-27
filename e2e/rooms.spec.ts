@@ -1,7 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
+import { leaveRoomConfirmed, openRoomViaDialog, ROOM_URL } from './support/lobby.js';
 import { newUser } from './support/users.js';
-
-const ROOM_URL = /\/room\/[0-9a-f-]{36}$/;
 
 function roomRow(page: Page, host: string) {
   return page.getByRole('table', { name: '房间列表' }).getByRole('row').filter({ hasText: host });
@@ -13,7 +12,7 @@ test('开象棋房间，另一用户在大厅看到并加入，第三人看到�
   const carol = await newUser(browser, 'third');
 
   await alice.page.goto('/lobby');
-  await alice.page.getByRole('button', { name: '开中国象棋房间' }).click();
+  await openRoomViaDialog(alice.page, { game: 'chess' });
   await expect(alice.page.getByRole('heading', { name: '中国象棋房间' })).toBeVisible();
   await expect(alice.page).toHaveURL(ROOM_URL);
   const roomPath = new URL(alice.page.url()).pathname;
@@ -23,9 +22,9 @@ test('开象棋房间，另一用户在大厅看到并加入，第三人看到�
 
   await bob.page.goto('/lobby');
   const row = roomRow(bob.page, alice.username);
-  await expect(row).toContainText('中国象棋');
+  await expect(row).toContainText('中国象棋·盲棋');
   await expect(row).toContainText('1/2');
-  await expect(row).toContainText('可加入');
+  await expect(row).toContainText('等待中');
   await row.getByRole('button', { name: '加入' }).click();
   await expect(bob.page.getByRole('heading', { name: '中国象棋房间' })).toBeVisible();
   expect(new URL(bob.page.url()).pathname).toBe(roomPath);
@@ -36,16 +35,16 @@ test('开象棋房间，另一用户在大厅看到并加入，第三人看到�
   await carol.page.goto('/lobby');
   const fullRow = roomRow(carol.page, alice.username);
   await expect(fullRow).toContainText('2/2');
-  await expect(fullRow).toContainText('已满');
-  await expect(fullRow.getByRole('button', { name: '加入' })).toHaveCount(0);
+  await expect(fullRow).toContainText('已满员');
+  await expect(fullRow.getByRole('button', { name: '加入' })).toBeDisabled();
 
-  await bob.page.getByRole('button', { name: '离开房间' }).click();
+  await leaveRoomConfirmed(bob.page);
   await expect(bob.page.getByRole('heading', { name: '游戏大厅' })).toBeVisible();
   await expect(alice.page.getByRole('button', { name: '返回大厅' })).toBeVisible();
   await alice.page.getByRole('button', { name: '返回大厅' }).click();
   await expect(alice.page.getByRole('heading', { name: '游戏大厅' })).toBeVisible();
 
-  await carol.page.getByRole('button', { name: '刷新房间列表' }).click();
+  // The lobby list refreshes itself (TD-004), so no manual refresh is needed.
   await expect(roomRow(carol.page, alice.username)).toHaveCount(0);
 
   for (const u of [alice, bob, carol]) await u.context.close();
@@ -54,14 +53,14 @@ test('开象棋房间，另一用户在大厅看到并加入，第三人看到�
 test('未登录直接打开房间页面被带到登录页', async ({ page, browser }) => {
   const alice = await newUser(browser, 'rhost');
   await alice.page.goto('/lobby');
-  await alice.page.getByRole('button', { name: '开德州扑克房间' }).click();
+  await openRoomViaDialog(alice.page, { game: 'poker' });
   await expect(alice.page).toHaveURL(ROOM_URL);
 
   await page.goto(new URL(alice.page.url()).pathname);
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByRole('button', { name: '登录' })).toBeVisible();
 
-  await alice.page.getByRole('button', { name: '离开房间' }).click();
+  await leaveRoomConfirmed(alice.page);
   await alice.context.close();
 });
 
@@ -71,7 +70,7 @@ test('手机视口：开德州扑克房间、加入与离开，无横向滚动',
   const bob = await newUser(browser, 'mguest');
 
   await alice.page.goto('/lobby');
-  await alice.page.getByRole('button', { name: '开德州扑克房间' }).click();
+  await openRoomViaDialog(alice.page, { game: 'poker' });
   await expect(alice.page.getByRole('heading', { name: '德州扑克房间' })).toBeVisible();
 
   await bob.page.goto('/lobby');
@@ -86,9 +85,9 @@ test('手机视口：开德州扑克房间、加入与离开，无横向滚动',
   await expect(alice.page.getByText(bob.username)).toBeVisible();
   expect(await noHorizontalScroll()).toBe(true);
 
-  await bob.page.getByRole('button', { name: '离开房间' }).click();
+  await leaveRoomConfirmed(bob.page);
   await expect(bob.page.getByRole('heading', { name: '游戏大厅' })).toBeVisible();
-  await alice.page.getByRole('button', { name: '离开房间' }).click();
+  await leaveRoomConfirmed(alice.page);
   await expect(alice.page.getByRole('heading', { name: '游戏大厅' })).toBeVisible();
 
   for (const u of [alice, bob]) await u.context.close();

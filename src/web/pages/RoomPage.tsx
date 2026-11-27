@@ -1,27 +1,57 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import type { ChessReason, ChessView, RoomSnapshot } from '../../shared/protocol.js';
-import { api, errorMessage } from '../api.js';
+import { ERROR_MESSAGES, type ChessReason, type ChessView, type RoomSnapshot } from '../../shared/protocol.js';
+import { ApiRequestError, api, errorMessage } from '../api.js';
 import { ChessBoard, pieceLabel } from '../components/ChessBoard.js';
+import { ConnectionStatus, type ConnectionState } from '../components/ConnectionStatus.js';
+import { Modal } from '../components/Modal.js';
 import { PokerTable } from '../components/PokerTable.js';
 import { connectSocket } from '../socket.js';
+
+const LEAVE_CONSEQUENCE = {
+  chess: '对局中离开将判负',
+  poker: '本手进行中离开将弃牌并让出座位',
+} as const;
 
 export function RoomPage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
   const [room, setRoom] = useState<RoomSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [conn, setConn] = useState<ConnectionState>('loading');
+  const [confirmLeave, setConfirmLeave] = useState(false);
+
+  const backToLobbyClosed = useCallback(() => {
+    navigate('/lobby', { replace: true, state: { notice: ERROR_MESSAGES.ROOM_NOT_FOUND } });
+  }, [navigate]);
+
   useEffect(() => {
     let cancelled = false;
-    api
-      .roomState(id)
-      .then(({ room }) => {
-        if (!cancelled) setRoom(room);
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setError(errorMessage(err));
-      });
+    const load = () => {
+      api
+        .roomState(id)
+        .then(({ room }) => {
+          if (cancelled) return;
+          setRoom(room);
+          setConn('ok');
+        })
+        .catch((err: unknown) => {
+          if (cancelled) return;
+          if (err instanceof ApiRequestError && (err.status === 404 || err.status === 403)) backToLobbyClosed();
+          else if (err instanceof ApiRequestError && err.code === 'NETWORK_ERROR') setConn('reconnecting');
+          else setError(errorMessage(err));
+        });
+    };
+    load();
     const socket = connectSocket();
+    // Every (re)connect re-reads the authoritative state, so a reconnect shows the latest position (FR-110).
+    socket.on('connect', load);
+    socket.on('disconnect', () => {
+      if (!cancelled) setConn('reconnecting');
+    });
+    socket.on('connect_error', () => {
+      if (!cancelled) setConn('reconnecting');
+    });
     socket.on('room:state', (snap: RoomSnapshot) => {
       if (snap.roomId !== id) return;
       setRoom((prev) => (prev && prev.version > snap.version ? prev : snap));
@@ -33,9 +63,10 @@ export function RoomPage() {
       cancelled = true;
       socket.close();
     };
-  }, [id, navigate]);
+  }, [id, navigate, backToLobbyClosed]);
 
   async function leave() {
+    setConfirmLeave(false);
     try {
       await api.leaveRoom(id);
     } catch (err) {
@@ -70,7 +101,18 @@ export function RoomPage() {
 
   return (
     <main className="page">
-      <h1>{title}</h1>
+      <ConnectionStatus state={conn} />
+      <div className="nav-bar">
+        <h1>{title}</h1>
+        <div className="actions">
+          <button type="button" onClick={() => navigate('/lobby')}>
+            回到大厅
+          </button>
+          <button type="button" className="secondary" onClick={() => setConfirmLeave(true)}>
+            离开房间
+          </button>
+        </div>
+      </div>
       {error && (
         <div role="alert" className="error">
           {error}
@@ -114,12 +156,18 @@ export function RoomPage() {
           )}
         </>
       )}
-      {!room?.chess?.result && (
-        <div className="actions">
-          <button type="button" onClick={() => void leave()}>
-            {room?.chess?.status === 'finished' ? '返回大厅' : '离开房间'}
-          </button>
-        </div>
+      {confirmLeave && (
+        <Modal title="确认离开房间" onClose={() => setConfirmLeave(false)}>
+          <p>{LEAVE_CONSEQUENCE[room?.game ?? 'chess']}</p>
+          <div className="actions">
+            <button type="button" onClick={() => void leave()}>
+              确认离开
+            </button>
+            <button type="button" className="secondary" onClick={() => setConfirmLeave(false)}>
+              取消
+            </button>
+          </div>
+        </Modal>
       )}
     </main>
   );

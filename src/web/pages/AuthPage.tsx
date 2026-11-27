@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { api, errorMessage } from '../api.js';
+import { ConnectionStatus } from '../components/ConnectionStatus.js';
 
 export function AuthPage({ mode }: { mode: 'register' | 'login' }) {
   const navigate = useNavigate();
@@ -34,7 +35,13 @@ export function AuthPage({ mode }: { mode: 'register' | 'login' }) {
   }
 
   return (
-    <main className="page narrow">
+    <main className="page narrow auth-page">
+      <ConnectionStatus state="ok" />
+      <div className="auth-brand">
+        <div className="brand-name">DeonGame</div>
+        <p className="brand-tagline">盲棋与德州扑克，随时开一局</p>
+      </div>
+      <div className="card auth-card">
       <h1>{isRegister ? '注册' : '登录'}</h1>
       <form onSubmit={onSubmit} noValidate className="stack">
         <label className="field">
@@ -66,9 +73,10 @@ export function AuthPage({ mode }: { mode: 'register' | 'login' }) {
           {isRegister ? '注册' : '登录'}
         </button>
       </form>
-      <p>
+      <p className="auth-switch">
         {isRegister ? <Link to="/login">已有账号？去登录</Link> : <Link to="/register">没有账号？去注册</Link>}
       </p>
+      </div>
     </main>
   );
 }

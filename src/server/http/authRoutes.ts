@@ -1,6 +1,8 @@
 import { Router, type Request } from 'express';
 import { hashPassword, verifyPassword } from '../auth/password.js';
-import { requireAuth, setSessionCookie } from '../auth/middleware.js';
+import { clearSessionCookie, requireAuth, setSessionCookie } from '../auth/middleware.js';
+import { parseCookies } from '../auth/sessions.js';
+import { SESSION_COOKIE } from '../../shared/constants.js';
 import { UsernameTakenError, type UserRow } from '../db/users.js';
 import { AppError } from '../errors.js';
 import type { AppContext } from '../context.js';
@@ -16,7 +18,8 @@ function readCredentials(req: Request): { username: string; password: string } {
   if (password !== undefined && password !== null && typeof password !== 'string') throw new AppError('VALIDATION_FAILED');
   if (typeof username !== 'string' || username.trim() === '') throw new AppError('VALIDATION_FAILED', '用户名为必填项');
   if (typeof password !== 'string' || password.trim() === '') throw new AppError('VALIDATION_FAILED', '密码为必填项');
-  if (username.length > MAX_FIELD_LENGTH || password.length > MAX_FIELD_LENGTH) throw new AppError('VALIDATION_FAILED');
+  if (username.length > MAX_FIELD_LENGTH) throw new AppError('VALIDATION_FAILED', `用户名不能超过 ${MAX_FIELD_LENGTH} 个字符`);
+  if (password.length > MAX_FIELD_LENGTH) throw new AppError('VALIDATION_FAILED', `密码不能超过 ${MAX_FIELD_LENGTH} 个字符`);
   return { username, password };
 }
 
@@ -27,6 +30,7 @@ export function toUserDto(ctx: AppContext, user: UserRow): UserDto {
     rating: user.rating,
     chips: Number(user.chips_balance),
     currentRoomId: ctx.rooms.currentRoomId(user.id),
+    activeRoomId: ctx.rooms.activeRoomId(user.id),
   };
 }
 
@@ -60,6 +64,14 @@ export function authRoutes(ctx: AppContext): Router {
     setSessionCookie(ctx, res, session.token, session.expiresAt);
     ctx.logger.info({ event: 'user_logged_in', userId: user.id }, 'user logged in');
     res.status(200).json({ user: toUserDto(ctx, user) });
+  });
+
+  router.post('/api/auth/logout', async (req, res) => {
+    const token = parseCookies(req.headers.cookie)[SESSION_COOKIE];
+    const userId = await ctx.sessions.revoke(token);
+    clearSessionCookie(ctx, res);
+    if (userId) ctx.logger.info({ event: 'user_logged_out', userId }, 'user logged out');
+    res.status(204).end();
   });
 
   router.get('/api/me', requireAuth(ctx), (req, res) => {

@@ -39,6 +39,8 @@ export interface UserDto {
   rating: number;
   chips: number;
   currentRoomId: string | null;
+  /** Room of the user's unfinished game (room not closed), else null. */
+  activeRoomId: string | null;
 }
 
 export interface RoomListItem {

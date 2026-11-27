@@ -105,6 +105,52 @@ describe('register and login (AC-1, AC-2)', () => {
     expect(typed.status).toBe(400);
   });
 
+  it('names the over-long field, reporting the username first (AC-10)', async () => {
+    const c = new Client(ts.baseUrl);
+    const long = 'x'.repeat(201);
+    const cases: [unknown, string][] = [
+      [{ username: long, password: 'pw' }, '用户名不能超过 200 个字符'],
+      [{ username: uniqueName('l'), password: long }, '密码不能超过 200 个字符'],
+      [{ username: long, password: long }, '用户名不能超过 200 个字符'],
+    ];
+    for (const path of ['/api/auth/register', '/api/auth/login']) {
+      for (const [body, message] of cases) {
+        const res = await c.post<ErrBody>(path, body);
+        expect(res.status).toBe(400);
+        expect(res.body.error).toEqual({ code: 'VALIDATION_FAILED', message });
+      }
+    }
+  });
+
+  it('logs out: clears the cookie and revokes the session (AC-4)', async () => {
+    const c = new Client(ts.baseUrl);
+    await c.register(uniqueName('out'));
+    const oldCookie = c.cookie;
+    const res = await c.post('/api/auth/logout', {});
+    expect(res.status).toBe(204);
+    expect(res.setCookie).toMatch(/^dg_session=;/);
+    expect(res.setCookie).toMatch(/Max-Age=0|Expires=Thu, 01 Jan 1970/i);
+    expect((await c.get('/api/me')).status).toBe(401);
+    const replay = new Client(ts.baseUrl);
+    replay.cookie = oldCookie;
+    expect((await replay.get('/api/me')).status).toBe(401);
+    expect((await new Client(ts.baseUrl).post('/api/auth/logout', {})).status).toBe(204);
+  });
+
+  it('reports activeRoomId only while the room is open (AC-1, AC-2)', async () => {
+    const c = new Client(ts.baseUrl);
+    await c.register(uniqueName('act'));
+    type Me = { user: { activeRoomId: string | null; currentRoomId: string | null } };
+    expect((await c.get<Me>('/api/me')).body.user.activeRoomId).toBeNull();
+    const created = await c.post<{ room: { roomId: string } }>('/api/chess/ai-games', {});
+    const roomId = created.body.room.roomId;
+    expect((await c.get<Me>('/api/me')).body.user).toMatchObject({ activeRoomId: roomId, currentRoomId: roomId });
+    await c.post(`/api/rooms/${roomId}/chess/resign`, {});
+    expect((await c.get<Me>('/api/me')).body.user).toMatchObject({ activeRoomId: null, currentRoomId: roomId });
+    await c.post(`/api/rooms/${roomId}/leave`);
+    expect((await c.get<Me>('/api/me')).body.user.activeRoomId).toBeNull();
+  });
+
   it('reports health', async () => {
     const res = await fetch(`${ts.baseUrl}/healthz`);
     expect(res.status).toBe(200);
