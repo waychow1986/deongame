@@ -17,30 +17,29 @@
     "errorLogRules": [
       {
         "name": "app-error-log",
-        "structured": {
-          "field": "level",
-          "values": [
-            "error",
-            "fatal"
-          ],
-          "messageField": "msg"
-        },
+        "kind": "structured",
+        "field": "level",
+        "values": [
+          "error",
+          "fatal"
+        ],
+        "messageField": "msg",
         "severity": "high"
       },
       {
         "name": "node-fatal",
+        "kind": "pattern",
         "pattern": "^FATAL ERROR: (?<message>.*)$",
         "severity": "high"
       },
       {
         "name": "app-warn-burst",
-        "structured": {
-          "field": "level",
-          "values": [
-            "warn"
-          ],
-          "messageField": "msg"
-        },
+        "kind": "structured",
+        "field": "level",
+        "values": [
+          "warn"
+        ],
+        "messageField": "msg",
         "severity": "medium",
         "threshold": {
           "windowMinutes": 5,

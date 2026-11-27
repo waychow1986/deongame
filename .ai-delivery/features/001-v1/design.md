@@ -420,7 +420,7 @@ web 服务（Node 22，单进程，端口 8080）
 
 - 日志格式：每行一条 JSON（pino），字段 `level`（`trace`/`debug`/`info`/`warn`/`error`/`fatal`）、`time`、`msg`，以及 `event`（如 `http_request`、`chess_finished`、`poker_hand_settled`、`settlement_failed`、`migration_failed`）、`roomId`、`gameId`/`handId`、`userId`、`code`。
 - 写 `error` 的情况：未捕获的路由异常（返回 500 `INTERNAL_ERROR`）、结算写库失败、迁移失败、数据库连接池错误；`fatal`：启动失败、未捕获异常/拒绝。被拒绝的业务操作（409 等）只记 `info`，不记 `warn`/`error`（它们是正常用户行为）。数据库连接失败后的重试记 `warn`。
-- 部署声明 `operations.errorLogRules`：`app-error-log`（`level` ∈ `error`/`fatal`，高）、`node-fatal`（行首 `FATAL ERROR:`，V8 致命错误，高）、`app-warn-burst`（5 分钟内 ≥ 20 条 `warn`，中）。
+- 部署声明 `operations.errorLogRules`：`app-error-log`（`kind: structured`，`level` ∈ `error`/`fatal`，高）、`node-fatal`（`kind: pattern`，行首 `FATAL ERROR:`，V8 致命错误，高）、`app-warn-burst`（`kind: structured`，5 分钟内 ≥ 20 条 `warn`，中）。
 
 ## SLO、限制、扩缩容、重试与恢复
 
