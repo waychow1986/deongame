@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "stepId": "S7",
+  "result": "done",
+  "summary": "按 PQ-001 的人工答案修订 spec.md：联机与人机象棋对局都可以提和（电脑固定同意，见假设 A-20），双方都只剩帅/将时自动判和（假设 A-21），和棋积分不变；新增 FR-036～FR-038 与 AC-21，并更新覆盖关系，关闭 PQ-001。",
+  "asks": [],
+  "outputs": [
+    ".ai-delivery/features/001-v1/spec.md"
+  ]
+}
