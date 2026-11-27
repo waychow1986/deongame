@@ -115,6 +115,8 @@ export class RoomManager {
         if (room.closed || !room.listed) throw new AppError('ROOM_NOT_FOUND');
         if (occupiedCount(room) >= room.capacity) throw new AppError('ROOM_FULL');
         if (room.chess && room.chess.status !== 'waiting') throw new AppError('ROOM_FULL');
+        const freeSeat = room.poker ? room.poker.seats.findIndex((s) => s === null) : -1;
+        if (room.poker && freeSeat < 0) throw new AppError('ROOM_FULL');
         room.members.push({ ...user });
         this.userRoom.set(user.userId, room.id);
         if (room.chess) {
@@ -123,8 +125,7 @@ export class RoomManager {
           room.chess.turn = 'red';
         }
         if (room.poker) {
-          const idx = room.poker.seats.findIndex((s) => s === null);
-          room.poker.seats[idx] = { kind: 'human', userId: user.userId, name: user.username };
+          room.poker.seats[freeSeat] = { kind: 'human', userId: user.userId, name: user.username };
         }
         room.version += 1;
         return room;

@@ -13,7 +13,7 @@ function App() {
         <Route path="/register" element={<AuthPage mode="register" />} />
         <Route path="/login" element={<AuthPage mode="login" />} />
         <Route path="/lobby" element={<LobbyPage />} />
-        <Route path="/rooms/:id" element={<RoomPage />} />
+        <Route path="/room/:id" element={<RoomPage />} />
         <Route path="*" element={<Navigate to="/lobby" replace />} />
       </Routes>
     </BrowserRouter>

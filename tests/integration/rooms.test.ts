@@ -106,6 +106,23 @@ describe('rooms (AC-4, AC-5)', () => {
     for (const c of [host, x, y]) await c.post(`/api/rooms/${roomId}/leave`);
   });
 
+  it('rejects a tenth player with 409 once a poker room has nine players', async () => {
+    const host = await user('ph');
+    const guests = await Promise.all(Array.from({ length: 8 }, (_, i) => user(`pg${i}`)));
+    const tenth = await user('p10');
+    const { roomId } = (await host.post<RoomBody>('/api/rooms', { game: 'poker' })).body.room;
+    for (const g of guests) expect((await g.post(`/api/rooms/${roomId}/join`)).status).toBe(200);
+    expect(await listed(tenth, roomId)).toMatchObject({ players: 9, capacity: 9, full: true });
+
+    const rejected = await tenth.post<ErrBody>(`/api/rooms/${roomId}/join`);
+    expect(rejected.status).toBe(409);
+    expect(rejected.body.error.code).toBe('ROOM_FULL');
+    expect((await host.get<RoomBody>(`/api/rooms/${roomId}/state`)).body.room.members).toHaveLength(9);
+    expect(await listed(tenth, roomId)).toMatchObject({ players: 9, capacity: 9, full: true });
+    expect((await tenth.get<{ user: { currentRoomId: null } }>('/api/me')).body.user.currentRoomId).toBeNull();
+    for (const c of [host, ...guests]) await c.post(`/api/rooms/${roomId}/leave`);
+  });
+
   it('keeps a user in only one room at a time', async () => {
     const alice = await user('one');
     const bob = await user('two');

@@ -28,7 +28,7 @@ export function LobbyPage() {
       .then(({ user }) => {
         if (cancelled) return;
         if (user.currentRoomId) {
-          navigate(`/rooms/${user.currentRoomId}`, { replace: true });
+          navigate(`/room/${user.currentRoomId}`, { replace: true });
           return;
         }
         setMe(user);
@@ -47,7 +47,7 @@ export function LobbyPage() {
     setError(null);
     try {
       const { room } = await fn();
-      navigate(`/rooms/${room.roomId}`);
+      navigate(`/room/${room.roomId}`);
     } catch (err) {
       setError(errorMessage(err));
       void refresh();

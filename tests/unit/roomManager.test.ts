@@ -34,6 +34,19 @@ describe('RoomManager', () => {
     expect(results.filter((r) => r.status === 'rejected')).toHaveLength(1);
   });
 
+  it('rejects a tenth player once all nine poker seats are taken', async () => {
+    const rm = new RoomManager();
+    const room = await rm.create(alice, 'poker');
+    for (let i = 1; i < 9; i += 1) await rm.join({ userId: `p${i}`, username: `player${i}` }, room.id);
+    expect(rm.list()[0]).toMatchObject({ players: 9, capacity: 9, full: true });
+
+    await expect(rm.join({ userId: 'p9', username: 'player9' }, room.id)).rejects.toMatchObject({ code: 'ROOM_FULL' });
+    expect(room.members).toHaveLength(9);
+    expect(room.poker?.seats).toHaveLength(9);
+    expect(rm.currentRoomId('p9')).toBeNull();
+    expect(rm.list()[0]).toMatchObject({ players: 9, capacity: 9, full: true });
+  });
+
   it('keeps a user in at most one room', async () => {
     const rm = new RoomManager();
     const r1 = await rm.create(alice, 'poker');

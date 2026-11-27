@@ -1,6 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 import { newUser } from './support/users.js';
 
+const ROOM_URL = /\/room\/[0-9a-f-]{36}$/;
+
 function roomRow(page: Page, host: string) {
   return page.getByRole('table', { name: '房间列表' }).getByRole('row').filter({ hasText: host });
 }
@@ -13,6 +15,11 @@ test('开象棋房间，另一用户在大厅看到并加入，第三人看到�
   await alice.page.goto('/lobby');
   await alice.page.getByRole('button', { name: '开中国象棋房间' }).click();
   await expect(alice.page.getByRole('heading', { name: '中国象棋房间' })).toBeVisible();
+  await expect(alice.page).toHaveURL(ROOM_URL);
+  const roomPath = new URL(alice.page.url()).pathname;
+  await alice.page.goto(roomPath);
+  await expect(alice.page.getByRole('heading', { name: '中国象棋房间' })).toBeVisible();
+  await expect(alice.page).toHaveURL(ROOM_URL);
 
   await bob.page.goto('/lobby');
   const row = roomRow(bob.page, alice.username);
@@ -21,6 +28,7 @@ test('开象棋房间，另一用户在大厅看到并加入，第三人看到�
   await expect(row).toContainText('可加入');
   await row.getByRole('button', { name: '加入' }).click();
   await expect(bob.page.getByRole('heading', { name: '中国象棋房间' })).toBeVisible();
+  expect(new URL(bob.page.url()).pathname).toBe(roomPath);
   await expect(bob.page.getByRole('status', { name: '对局状态' })).toContainText('你执黑');
   await expect(alice.page.getByRole('status', { name: '对局状态' })).toContainText('你执红');
   await expect(alice.page.getByRole('status', { name: '对局状态' })).toContainText('轮到你走棋');
@@ -41,6 +49,20 @@ test('开象棋房间，另一用户在大厅看到并加入，第三人看到�
   await expect(roomRow(carol.page, alice.username)).toHaveCount(0);
 
   for (const u of [alice, bob, carol]) await u.context.close();
+});
+
+test('未登录直接打开房间页面被带到登录页', async ({ page, browser }) => {
+  const alice = await newUser(browser, 'rhost');
+  await alice.page.goto('/lobby');
+  await alice.page.getByRole('button', { name: '开德州扑克房间' }).click();
+  await expect(alice.page).toHaveURL(ROOM_URL);
+
+  await page.goto(new URL(alice.page.url()).pathname);
+  await expect(page).toHaveURL(/\/login$/);
+  await expect(page.getByRole('button', { name: '登录' })).toBeVisible();
+
+  await alice.page.getByRole('button', { name: '离开房间' }).click();
+  await alice.context.close();
 });
 
 test('手机视口：开德州扑克房间、加入与离开，无横向滚动', async ({ browser }, testInfo) => {
