@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "stepId": "S22",
+  "result": "done",
+  "summary": "已修复 S23 的两项审查意见：补充扑克房间坐满 9 人后第 10 人加入返回 409“房间已满”、成员与列表仍为 9/9 且显示已满的单元测试与集成测试（在当前代码上通过，在删掉按容量检查的变体上两者都失败，恢复后通过；另在加入时增加找不到空座位即判满员的防护），并按 TD-019 把房间页面路由从 /rooms/:id 改为 /room/:id（大厅两处跳转一并修改，新增或改动的端到端断言在修改前 2 个失败，修改后通过）；会话内 lint、typecheck、build 通过（约 3 秒），全量单元测试 15 项通过（约 1 秒），全量集成测试 22 项通过（约 2 秒），本批改动的端到端文件 e2e/rooms.spec.ts 在 chromium 与 mobile 项目 5 次运行通过、1 次按设计跳过（约 7 秒，同文件中未改动的手机视口用例随文件一起运行了一次）；其他既有端到端用例没有运行，验收标准由 G3 在测试环境中独立验证。",
+  "asks": [],
+  "outputs": [
+    "src/server/rooms/roomManager.ts",
+    "src/web/main.tsx",
+    "src/web/pages/LobbyPage.tsx",
+    "tests/unit/roomManager.test.ts",
+    "tests/integration/rooms.test.ts",
+    "e2e/rooms.spec.ts"
+  ]
+}

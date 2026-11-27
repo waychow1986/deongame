@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "stepId": "S34",
+  "result": "done",
+  "summary": "根因：eslint.config.js 的忽略列表没有排除 .ai-delivery/**，`npm run lint`（eslint .）把平台独立测试脚本（runtime/qa 下的 .mjs，测试计划目录，只读、非产品代码）也纳入检查，报出 10 个错误导致第 1 条静态分析命令退出码 1；修复为在 eslint 忽略列表中加入 '.ai-delivery/**'，没有改动任何测试或测试计划目录；复现测试即部署声明中的 `npm run lint`：修改前失败（10 errors，与平台日志一致），修改后通过（0 错误，约 2 秒）；随后按部署声明全量运行 npm ci、npm run typecheck（通过，约 4 秒）、npm run build（通过，约 2 秒）、npm run test:unit（94/94 通过，约 7 秒）、npm run test:integration（45/45 通过，约 4 秒）；本次未新写或改动端到端用例，既有端到端用例按要求未在会话中运行，由 G3 独立测试验证。",
+  "asks": [],
+  "outputs": [
+    "eslint.config.js"
+  ]
+}

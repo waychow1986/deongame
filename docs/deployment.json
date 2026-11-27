@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 2,
+  "services": [
+    {
+      "name": "web",
+      "description": "DeonGame 单体服务：网页前端静态文件、REST 接口 /api/*、实时推送 /socket.io/*（socket.io），对局状态在本进程内存中，用户数据在 postgres 依赖中。",
+      "build": {
+        "context": ".",
+        "file": "Dockerfile"
+      },
+      "port": 8080,
+      "healthPath": "/healthz",
+      "exposed": true
+    }
+  ],
+  "operations": {
+    "errorLogRules": [
+      {
+        "name": "app-error-log",
+        "kind": "structured",
+        "field": "level",
+        "values": [
+          "error",
+          "fatal"
+        ],
+        "messageField": "msg",
+        "severity": "high"
+      },
+      {
+        "name": "node-fatal",
+        "kind": "pattern",
+        "pattern": "^FATAL ERROR: (?<message>.*)$",
+        "severity": "high"
+      },
+      {
+        "name": "app-warn-burst",
+        "kind": "structured",
+        "field": "level",
+        "values": [
+          "warn"
+        ],
+        "messageField": "msg",
+        "severity": "medium",
+        "threshold": {
+          "windowMinutes": 5,
+          "count": 20
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "stepId": "S24",
+  "result": "done",
+  "summary": "批次 2（揭棋引擎、盖棋不泄露、联机走棋推送、提和/认输/离开即认输、积分结算与棋盘界面，AC-6/7/8/9/10/12/13）已实现：lint、typecheck、build 通过，全量单元测试 53 项通过（约 1 秒），全量集成测试 27 项通过（真实 PostgreSQL，约 3 秒），本批新写的端到端用例 e2e/chess.spec.ts 在 chromium 与 mobile 项目共 3 项通过、1 项按设计跳过（仅手机项目运行，约 6 秒），既有端到端用例未运行、由 G3 独立测试验证；说明：引擎实现先于其单元测试写成，未展示严格的先红后绿，房间结束后 10 分钟自动释放映射与 AI 对局自动同意和棋（批次 4）未在本批实现。",
+  "asks": [],
+  "outputs": [
+    "src/shared/xiangqi/index.ts",
+    "src/shared/protocol.ts",
+    "src/server/errors.ts",
+    "src/server/db/chessResults.ts",
+    "src/server/rooms/chessSettlement.ts",
+    "src/server/rooms/roomManager.ts",
+    "src/server/rooms/view.ts",
+    "src/server/http/chessRoutes.ts",
+    "src/server/http/roomRoutes.ts",
+    "src/server/http/app.ts",
+    "src/web/api.ts",
+    "src/web/components/ChessBoard.tsx",
+    "src/web/pages/RoomPage.tsx",
+    "src/web/styles.css",
+    "tests/unit/xiangqi.test.ts",
+    "tests/unit/chessRoom.test.ts",
+    "tests/integration/chess.test.ts",
+    "e2e/chess.spec.ts",
+    "docs/api.md"
+  ]
+}

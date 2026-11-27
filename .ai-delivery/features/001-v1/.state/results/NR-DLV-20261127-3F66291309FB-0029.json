@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "stepId": "S33",
+  "result": "done",
+  "summary": "根因：服务端象棋状态与快照中没有“提和被拒绝”的信息，前端只在页面内存里比较前后两份状态推断拒绝，漏掉中间那份状态或刷新页面后就不显示（FR-036）；修复为服务端在拒绝时记录 drawDeclined={by:提和方}（下一步走棋、新的提和或对局结束时清除）并放进快照，前端状态区直接按该字段显示“对方拒绝了提和”，删除内存推断；复现单元测试（tests/unit/chessRoom.test.ts “a declined offer is kept in the room state…”）修改前失败（drawDeclined 为 undefined）、修改后通过；新增集成测试（推送与刷新后的 GET 状态都带拒绝信息）通过；全量单元测试 94/94 通过（约 7 秒），全量集成测试 45/45 通过（约 4 秒，真实 PostgreSQL），typecheck 与 build 通过，src/tests 的 eslint 无错误（npm run lint 报的 10 个错误全部在只读的测试计划目录 runtime/qa 中，本次未改动）；本次未新写或改动端到端用例，既有端到端用例按要求未在会话中运行，FR-036 的页面显示由 G3 独立测试（TS-30）重新验证；同时在 design.md 的快照说明中补记了 drawDeclined 字段。",
+  "asks": [],
+  "outputs": [
+    "src/server/rooms/roomManager.ts",
+    "src/server/rooms/view.ts",
+    "src/shared/protocol.ts",
+    "src/web/pages/RoomPage.tsx",
+    "tests/unit/chessRoom.test.ts",
+    "tests/integration/chess.test.ts",
+    ".ai-delivery/features/001-v1/design.md"
+  ]
+}

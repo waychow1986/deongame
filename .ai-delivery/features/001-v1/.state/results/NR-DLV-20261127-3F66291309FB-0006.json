@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "stepId": "S8",
+  "result": "done",
+  "summary": "写出 DeonGame V1 技术方案：TypeScript 单服务（Express REST + socket.io 推送 + React SPA），对局状态在内存、用户/会话/积分筹码结算在 PostgreSQL（平台容器依赖），自写揭棋与扑克规则引擎并按观看者裁剪快照保证隐藏信息；含接口契约、可测性约定、依赖声明与探测脚本、部署声明与错误日志规则、开发者命令；实验 E-1/E-2 已取证，单实例运行（OD-1）与网关 WebSocket 支持（OD-2）为待验证假设并附后备做法。",
+  "asks": [],
+  "outputs": [
+    ".ai-delivery/features/001-v1/design.md",
+    ".ai-delivery/features/001-v1/runtime/deployment.json",
+    "docs/dependencies.json",
+    "docs/deployment.json",
+    "deploy/probes/postgres.sh"
+  ]
+}

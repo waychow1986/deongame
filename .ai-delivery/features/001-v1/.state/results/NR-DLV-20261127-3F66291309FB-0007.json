@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "stepId": "S8",
+  "result": "done",
+  "summary": "按确定性检查反馈修正部署声明 docs/deployment.json 的 operations.errorLogRules：每条规则补上 kind（structured / pattern），structured 规则的 field、values、messageField 平铺到规则对象中，不再嵌套 structured 子对象；design.md 中对应描述同步标注 kind。技术方案其余内容不变：TypeScript 单服务（Express REST + socket.io + React SPA），对局状态在内存、用户与积分筹码在 PostgreSQL；OD-1、OD-2 仍为附后备做法的待验证假设。",
+  "asks": [],
+  "outputs": [
+    ".ai-delivery/features/001-v1/design.md",
+    "docs/deployment.json",
+    ".ai-delivery/features/001-v1/runtime/deployment.json",
+    "docs/dependencies.json",
+    "deploy/probes/postgres.sh"
+  ]
+}
