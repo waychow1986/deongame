@@ -1,0 +1,35 @@
+:root {
+  --font-body: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', system-ui, sans-serif;
+  --font-piece: 'STKaiti', 'KaiTi', 'Noto Serif SC', serif;
+
+  --color-bg: #f3ece0;
+  --color-bg-deep: #e8dcc7;
+  --color-surface: #fffdf8;
+  --color-surface-alt: #faf4e9;
+  --color-border: #e2d5bf;
+  --color-text: #2b2118;
+  --color-muted: #7a6a58;
+  --color-primary: #b23a2b;
+  --color-primary-hover: #9a2f22;
+  --color-primary-text: #ffffff;
+  --color-secondary: #efe4d2;
+  --color-secondary-text: #5a4532;
+  --color-accent: #2f6f62;
+  --color-negative: rgb(214, 48, 49);
+  --color-error-bg: #fdecea;
+  --color-error-text: #a61e1e;
+  --color-warning-bg: #fff4d6;
+  --color-warning-text: #7a5400;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --shadow-card: 0 2px 6px rgba(74, 52, 30, 0.08), 0 8px 24px rgba(74, 52, 30, 0.06);
+  --shadow-dialog: 0 12px 40px rgba(40, 26, 12, 0.28);
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --tap: 44px;
+}

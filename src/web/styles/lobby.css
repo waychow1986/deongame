@@ -1,0 +1,249 @@
+.top-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  margin: 0 0 var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+}
+
+.top-bar h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--color-primary);
+  letter-spacing: 1px;
+}
+
+.top-bar .me {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+}
+
+.top-bar .me .username {
+  font-weight: 700;
+}
+
+.top-bar .me .stat {
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 14px;
+}
+
+.top-bar .me .stat .value[data-negative='true'] {
+  color: var(--color-negative);
+  font-weight: 700;
+}
+
+.lobby-title {
+  font-size: 18px;
+  margin: var(--space-4) 0 var(--space-2);
+}
+
+.resume {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  background: var(--color-warning-bg);
+  border-color: #f0d68a;
+}
+
+.resume p {
+  margin: 0;
+}
+
+.game-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-3);
+  margin: var(--space-2) 0 var(--space-4);
+}
+
+button.game-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 96px;
+  padding: var(--space-4);
+  text-align: left;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+button.game-card:hover:not(:disabled) {
+  border-color: var(--color-primary);
+}
+
+.game-card .game-icon {
+  flex: 0 0 56px;
+  width: 56px;
+  height: 56px;
+}
+
+.game-card .game-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.game-card .game-title {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.game-card .game-intro {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--color-muted);
+}
+
+.game-card .game-blocked {
+  font-size: 13px;
+  color: var(--color-warning-text);
+}
+
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  padding: 0;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+th {
+  font-size: 14px;
+  color: var(--color-muted);
+  background: var(--color-surface-alt);
+}
+
+tbody tr:last-child td {
+  border-bottom: none;
+}
+
+td.room-name {
+  white-space: normal;
+  word-break: break-all;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 13px;
+  background: #e2efe9;
+  color: var(--color-accent);
+}
+
+.status-badge[data-status='playing'] {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+}
+
+.join-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.join-reason {
+  font-size: 13px;
+  color: var(--color-muted);
+}
+
+.empty {
+  text-align: center;
+  padding: var(--space-4);
+  margin: 0;
+}
+
+.create-form {
+  text-align: left;
+}
+
+.create-form fieldset {
+  border: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+}
+
+.create-form legend,
+.create-form .field > span {
+  font-weight: 600;
+  margin-bottom: var(--space-1);
+  padding: 0;
+}
+
+.choice-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.choice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-alt);
+  cursor: pointer;
+  font-weight: 400;
+}
+
+.choice input {
+  width: auto;
+  min-height: 0;
+  margin: 0;
+}
+
+@media (max-width: 480px) {
+  th,
+  td {
+    padding: 8px 4px;
+    font-size: 14px;
+  }
+  th:nth-child(2),
+  td:nth-child(2) {
+    white-space: normal;
+  }
+  .join-cell {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+  button {
+    padding: 8px 10px;
+  }
+}
+
+.page.top {
+  padding-bottom: 0;
+}

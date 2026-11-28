@@ -1,0 +1,38 @@
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.auth-brand {
+  text-align: center;
+  margin-bottom: var(--space-3);
+}
+
+.auth-brand .brand-name {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--color-primary);
+}
+
+.auth-brand .brand-tagline {
+  color: var(--color-muted);
+  margin: 0;
+}
+
+.auth-card h1 {
+  font-size: 22px;
+  text-align: center;
+}
+
+.auth-card button[type='submit'] {
+  width: 100%;
+  margin-top: var(--space-2);
+}
+
+.auth-switch {
+  text-align: center;
+  margin: var(--space-3) 0 0;
+}

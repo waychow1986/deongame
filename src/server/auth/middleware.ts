@@ -21,6 +21,16 @@ export function setSessionCookie(ctx: AppContext, res: Response, token: string, 
   });
 }
 
+export function clearSessionCookie(ctx: AppContext, res: Response): void {
+  res.cookie(SESSION_COOKIE, '', {
+    httpOnly: true,
+    sameSite: 'lax',
+    path: '/',
+    secure: ctx.config.cookieSecure,
+    maxAge: 0,
+  });
+}
+
 export function requireAuth(ctx: AppContext) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {

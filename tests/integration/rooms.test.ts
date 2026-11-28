@@ -123,6 +123,42 @@ describe('rooms (AC-4, AC-5)', () => {
     for (const c of [host, ...guests]) await c.post(`/api/rooms/${roomId}/leave`);
   });
 
+  it('validates the poker capacity (AC-9)', async () => {
+    const host = await user('cap');
+    for (const capacity of [1, 10, 2.5, '3', null]) {
+      const res = await host.post<ErrBody>('/api/rooms', { game: 'poker', capacity });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    }
+    expect((await host.get<{ user: { currentRoomId: null } }>('/api/me')).body.user.currentRoomId).toBeNull();
+    const chess = await host.post<RoomBody>('/api/rooms', { game: 'chess' });
+    expect(chess.body.room.capacity).toBe(2);
+    await host.post(`/api/rooms/${chess.body.room.roomId}/leave`);
+  });
+
+  it('fills a poker room up to its capacity with humans and bots (AC-7, AC-9)', async () => {
+    const host = await user('c3h');
+    const guest = await user('c3g');
+    const late = await user('c3l');
+    const created = await host.post<RoomBody>('/api/rooms', { game: 'poker', capacity: 3 });
+    expect(created.status).toBe(201);
+    const roomId = created.body.room.roomId;
+    expect(created.body.room.capacity).toBe(3);
+    expect(await listed(guest, roomId)).toMatchObject({ players: 1, capacity: 3, full: false });
+    expect((await guest.post(`/api/rooms/${roomId}/join`)).status).toBe(200);
+    expect((await host.post(`/api/rooms/${roomId}/poker/bots`, {})).status).toBe(201);
+    expect(await listed(late, roomId)).toMatchObject({ players: 3, capacity: 3, full: true });
+    const bot = await host.post<ErrBody>(`/api/rooms/${roomId}/poker/bots`, {});
+    expect(bot.status).toBe(409);
+    expect(bot.body.error.code).toBe('ROOM_FULL');
+    const join = await late.post<ErrBody>(`/api/rooms/${roomId}/join`);
+    expect(join.status).toBe(409);
+    expect(join.body.error.code).toBe('ROOM_FULL');
+    const seats = (await host.get<RoomBody>(`/api/rooms/${roomId}/state`)).body.room.poker?.seats ?? [];
+    expect(seats.every((s) => s.seat < 3)).toBe(true);
+    for (const c of [host, guest]) await c.post(`/api/rooms/${roomId}/leave`);
+  });
+
   it('keeps a user in only one room at a time', async () => {
     const alice = await user('one');
     const bob = await user('two');
@@ -180,5 +216,37 @@ describe('rooms (AC-4, AC-5)', () => {
     expect(state.body.room.chess?.status).toBe('finished');
     await alice.post(`/api/rooms/${roomId}/leave`);
     expect((await alice.get<{ user: { currentRoomId: null } }>('/api/me')).body.user.currentRoomId).toBeNull();
+  });
+
+  it('a finished chess game no longer blocks opening or joining another room (implicit release, Q2)', async () => {
+    const red = await user('pr');
+    const black = await user('pb');
+    const other = await user('po');
+    const { roomId } = (await red.post<RoomBody>('/api/rooms', { game: 'chess' })).body.room;
+    await black.post(`/api/rooms/${roomId}/join`);
+    expect((await black.post(`/api/rooms/${roomId}/chess/resign`)).status).toBe(200);
+
+    // Red plays again online: a new waiting room with the same settings, black is not pulled in.
+    const again = await red.post<RoomBody>('/api/rooms', { game: 'chess' });
+    expect(again.status).toBe(201);
+    expect(again.body.room).toMatchObject({ game: 'chess', status: 'waiting', capacity: 2 });
+    expect(again.body.room.members.map((m) => m.username)).toEqual([red.name]);
+    expect((await red.get<{ user: { currentRoomId: string } }>('/api/me')).body.user.currentRoomId).toBe(again.body.room.roomId);
+
+    // Black, still on the result screen of the old game, can join the new room.
+    const joined = await black.post<RoomBody>(`/api/rooms/${again.body.room.roomId}/join`);
+    expect(joined.status).toBe(200);
+    expect(joined.body.room.chess?.status).toBe('active');
+    expect((await black.get<RoomBody>(`/api/rooms/${roomId}/state`)).status).toBe(404);
+
+    // An AI game can be started straight after a finished game, too.
+    const ai = await other.post<RoomBody>('/api/chess/ai-games', {});
+    await other.post(`/api/rooms/${ai.body.room.roomId}/chess/resign`);
+    const ai2 = await other.post<RoomBody>('/api/chess/ai-games', {});
+    expect(ai2.status).toBe(201);
+    expect(ai2.body.room.chess).toMatchObject({ status: 'active', yourColor: 'red', captured: [] });
+
+    for (const c of [red, black]) await c.post(`/api/rooms/${again.body.room.roomId}/leave`);
+    await other.post(`/api/rooms/${ai2.body.room.roomId}/leave`);
   });
 });

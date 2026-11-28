@@ -150,6 +150,14 @@ export class RoomManager {
     return this.userRoom.get(userId) ?? null;
   }
 
+  /** The room holding the user's unfinished game, or null when there is none (TD-002). */
+  activeRoomId(userId: string): string | null {
+    const roomId = this.userRoom.get(userId);
+    if (!roomId) return null;
+    const room = this.rooms.get(roomId);
+    return room && !room.closed ? roomId : null;
+  }
+
   list(): RoomListItem[] {
     return [...this.rooms.values()]
       .filter((r) => r.listed && !r.closed)
@@ -169,8 +177,9 @@ export class RoomManager {
       });
   }
 
-  create(user: Member, game: GameType): Promise<Room> {
+  create(user: Member, game: GameType, capacity?: number): Promise<Room> {
     return this.globalLock.run(async () => {
+      await this.releaseFinished(user.userId);
       if (this.userRoom.has(user.userId)) throw new AppError('ALREADY_IN_ROOM');
       const room: Room = {
         id: randomUUID(),
@@ -178,7 +187,7 @@ export class RoomManager {
         mode: 'online',
         hostUserId: user.userId,
         members: [{ ...user }],
-        capacity: game === 'chess' ? CHESS_CAPACITY : POKER_CAPACITY,
+        capacity: game === 'chess' ? CHESS_CAPACITY : (capacity ?? POKER_CAPACITY),
         createdAt: Date.now() + this.rooms.size / 1000,
         version: 1,
         listed: true,
@@ -222,7 +231,8 @@ export class RoomManager {
 
   /** Starts a chess game against the computer: unlisted, the user plays red and moves first (FR-064). */
   createAiGame(user: Member): Promise<Room> {
-    return this.globalLock.run(() => {
+    return this.globalLock.run(async () => {
+      await this.releaseFinished(user.userId);
       if (this.userRoom.has(user.userId)) throw new AppError('ALREADY_IN_ROOM');
       const room: Room = {
         id: randomUUID(),
@@ -257,14 +267,15 @@ export class RoomManager {
   }
 
   join(user: Member, roomId: string): Promise<Room> {
-    return this.globalLock.run(() =>
-      this.withRoom(roomId, async (room) => {
+    return this.globalLock.run(async () => {
+      await this.releaseFinished(user.userId, roomId);
+      return this.withRoom(roomId, async (room) => {
         if (room.members.some((m) => m.userId === user.userId)) return room;
         if (this.userRoom.has(user.userId)) throw new AppError('ALREADY_IN_ROOM');
         if (room.closed || !room.listed) throw new AppError('ROOM_NOT_FOUND');
         if (occupiedCount(room) >= room.capacity) throw new AppError('ROOM_FULL');
         if (room.chess && room.chess.status !== 'waiting') throw new AppError('ROOM_FULL');
-        const freeSeat = room.poker ? pickFreeSeat(room.poker) : -1;
+        const freeSeat = room.poker ? pickFreeSeat(room.poker, room.capacity) : -1;
         if (room.poker && freeSeat < 0) throw new AppError('ROOM_FULL');
         if (room.poker) await this.refreshBalances(room.poker, [user.userId]);
         room.members.push({ ...user });
@@ -284,8 +295,32 @@ export class RoomManager {
         }
         room.version += 1;
         return room;
-      }),
-    );
+      });
+    });
+  }
+
+  /**
+   * Implicit release (TD-006): a user whose room is already closed (finished chess game) leaves it when
+   * opening or joining another room, so "再来一局" and joining from the lobby work after a game.
+   * Must run inside the global lock and before any other room lock is taken.
+   */
+  private async releaseFinished(userId: string, exceptRoomId?: string): Promise<void> {
+    const oldId = this.userRoom.get(userId);
+    if (!oldId || oldId === exceptRoomId) return;
+    const old = this.rooms.get(oldId);
+    if (!old) {
+      this.userRoom.delete(userId);
+      return;
+    }
+    if (!old.closed) return;
+    await old.lock.run(() => {
+      old.members = old.members.filter((m) => m.userId !== userId);
+      this.userRoom.delete(userId);
+      if (old.hostUserId === userId && old.members[0]) old.hostUserId = old.members[0].userId;
+      if (old.members.length === 0) this.rooms.delete(old.id);
+      old.version += 1;
+    });
+    if (old.members.length > 0) this.onRoomUpdate?.(old);
   }
 
   /** Removes the user from their room. Returns the room and the users who should receive an update. */
@@ -366,7 +401,8 @@ export class RoomManager {
         const poker = requirePokerMember(room, userId);
         if (room.hostUserId !== userId) throw new AppError('NOT_HOST');
         if (handActive(poker) || poker.nextHandPending) throw new AppError('HAND_IN_PROGRESS');
-        const seat = pickFreeSeat(poker);
+        if (occupiedCount(room) >= room.capacity) throw new AppError('ROOM_FULL');
+        const seat = pickFreeSeat(poker, room.capacity);
         if (seat < 0) throw new AppError('ROOM_FULL');
         poker.botCounter += 1;
         poker.seats[seat] = { kind: 'bot', name: `${COMPUTER_NAME} ${poker.botCounter}`, chips: POKER_DEFAULT_CHIPS };
@@ -384,6 +420,7 @@ export class RoomManager {
       if (seatedIndexes(poker).length < 2) throw new AppError('NOT_ENOUGH_PLAYERS');
       const hostSeat = poker.seats.findIndex((s) => s?.kind === 'human' && s.userId === room.hostUserId);
       await this.startPokerHand(room, poker.dealerSeat === null ? hostSeat : null);
+      room.version += 1;
       this.scheduleBot(room);
       return room;
     });
@@ -621,8 +658,8 @@ function nextSeatAfter(seats: number[], after: number): number {
 }
 
 /** Prefers seats that are not part of the running hand so a newcomer never inherits a hand seat. */
-function pickFreeSeat(poker: PokerTableState): number {
-  const free = poker.seats.flatMap((s, i) => (s === null ? [i] : []));
+function pickFreeSeat(poker: PokerTableState, capacity: number): number {
+  const free = poker.seats.flatMap((s, i) => (s === null && i < capacity ? [i] : []));
   if (handActive(poker)) {
     const fresh = free.find((i) => !(i in poker.handPlayers));
     if (fresh !== undefined) return fresh;

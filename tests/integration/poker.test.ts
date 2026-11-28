@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { evaluateHand } from '../../src/shared/poker/index.js';
 import type { PokerView, RoomSnapshot, UserDto } from '../../src/shared/protocol.js';
 import { Client, startTestServer, uniqueName, waitForEvent, type TestServer } from '../support/server.js';
 
@@ -119,6 +120,14 @@ describe('poker hands (AC-14)', () => {
     expect(hu.toActSeat).toBe(seatOf(hu, u4).seat);
   });
 
+  it('starting a hand advances the room version so clients accept the new snapshot (TD-014)', async () => {
+    const [u1, u2] = [await user('pv1'), await user('pv2')];
+    const roomId = await table(u1, u2);
+    const before = (await u1.c.get<RoomBody>(`/api/rooms/${roomId}/state`)).body.room.version;
+    const res = await u1.c.post<RoomBody>(`/api/rooms/${roomId}/poker/start`);
+    expect(res.body.room.version).toBeGreaterThan(before);
+  });
+
   it('enforces turn, call, minimum bet/raise rules and ignores a duplicate call (TS-32, TS-33)', async () => {
     const [a, b] = [await user('a'), await user('b')];
     const roomId = await table(a, b);
@@ -221,6 +230,32 @@ describe('poker hands (AC-14)', () => {
       const won = v.winners.find((w) => w.seat === seatOf(v, p).seat)?.amount ?? 0;
       expect(rows[p.id]).toBe(won - 10);
       expect((await me(p)).chips).toBe(1000 + won - 10);
+    }
+  });
+
+  it('reports each showdown seat’s best five cards from its hole cards and the board (TS-32)', async () => {
+    const [a, b] = [await user('bc1'), await user('bc2')];
+    const roomId = await table(a, b);
+    // Several hands so that "any five of the seven" would not pass by chance.
+    let cur = await start(a, roomId);
+    for (let hand = 1; hand <= 4; hand++) {
+      // Later hands start on their own after the previous result.
+      for (let i = 0; i < 50 && (cur.handNumber < hand || cur.toActSeat === null); i++) {
+        await new Promise((r) => setTimeout(r, 50));
+        cur = await view(a, roomId);
+      }
+      expect(cur.handNumber).toBe(hand);
+      const v = await checkDown([a, b], roomId, cur);
+      expect(v.stage).toBe('showdown');
+      for (const s of v.showdown) {
+        const seven = [...s.holeCards, ...v.board];
+        expect(s.bestCards).toHaveLength(5);
+        expect(new Set(s.bestCards).size).toBe(5);
+        for (const c of s.bestCards) expect(seven).toContain(c);
+        const best = evaluateHand(s.bestCards);
+        expect(best.rank).toBe(s.handRank);
+        expect(best.score).toEqual(evaluateHand(seven).score);
+      }
     }
   });
 

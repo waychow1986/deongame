@@ -1,0 +1,56 @@
+{
+  "schemaVersion" : 1,
+  "cases" : [ {
+    "id" : "SMK-001",
+    "title" : "从大厅开一局和电脑对战的象棋并点按走一步",
+    "path" : "SMK-001",
+    "source" : {
+      "deliveryId" : "DLV-20261127-CB228EF706CC",
+      "scenario" : "TS-07"
+    },
+    "lastRun" : {
+      "seconds" : 10,
+      "deliveryId" : "DLV-20261127-CB228EF706CC",
+      "at" : "2026-11-27T20:02:20.984661200Z"
+    }
+  }, {
+    "id" : "SMK-002",
+    "title" : "有电脑玩家的扑克牌桌显示自己的座位、自己的底牌与操作区",
+    "path" : "SMK-002",
+    "source" : {
+      "deliveryId" : "DLV-20261127-CB228EF706CC",
+      "scenario" : "TS-24"
+    },
+    "lastRun" : {
+      "seconds" : 10,
+      "deliveryId" : "DLV-20261127-CB228EF706CC",
+      "at" : "2026-11-27T20:02:45.588555900Z"
+    }
+  }, {
+    "id" : "SMK-003",
+    "title" : "注册后在大厅看到自己的积分与筹码，退出后重新登录",
+    "path" : "SMK-003",
+    "source" : {
+      "deliveryId" : "DLV-20261127-CB228EF706CC",
+      "scenario" : null
+    },
+    "lastRun" : {
+      "seconds" : 10,
+      "deliveryId" : "DLV-20261127-CB228EF706CC",
+      "at" : "2026-11-27T20:03:10.695772300Z"
+    }
+  }, {
+    "id" : "SMK-004",
+    "title" : "两名玩家开始联机盲棋对局，双方各走一步合法棋",
+    "path" : "SMK-004",
+    "source" : {
+      "deliveryId" : "DLV-20261127-CB228EF706CC",
+      "scenario" : null
+    },
+    "lastRun" : {
+      "seconds" : 10,
+      "deliveryId" : "DLV-20261127-CB228EF706CC",
+      "at" : "2026-11-27T20:03:30.894884500Z"
+    }
+  } ]
+}

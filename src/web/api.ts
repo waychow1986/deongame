@@ -10,20 +10,27 @@ export class ApiRequestError extends Error {
   }
 }
 
+export const NETWORK_ERROR_MESSAGE = '网络连接失败，请检查网络后重试';
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const res = await fetch(path, {
-    method,
-    credentials: 'same-origin',
-    headers: method === 'GET' ? {} : { 'Content-Type': 'application/json' },
-    body: method === 'GET' ? undefined : JSON.stringify(body ?? {}),
-  });
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      method,
+      credentials: 'same-origin',
+      headers: method === 'GET' ? {} : { 'Content-Type': 'application/json' },
+      body: method === 'GET' ? undefined : JSON.stringify(body ?? {}),
+    });
+  } catch {
+    throw new ApiRequestError(0, 'NETWORK_ERROR', NETWORK_ERROR_MESSAGE);
+  }
   const data = (await res.json().catch(() => null)) as unknown;
   if (!res.ok) {
     const err = (data as ApiError | null)?.error;
     if (res.status === 401 && err?.code === 'UNAUTHENTICATED' && !location.pathname.startsWith('/login')) {
       location.assign('/login');
     }
-    throw new ApiRequestError(res.status, err?.code ?? 'INTERNAL_ERROR', err?.message ?? '网络错误，请重试');
+    throw new ApiRequestError(res.status, err?.code ?? 'INTERNAL_ERROR', err?.message ?? NETWORK_ERROR_MESSAGE);
   }
   return data as T;
 }
@@ -33,9 +40,11 @@ export const api = {
     request<{ user: UserDto }>('POST', '/api/auth/register', { username, password }),
   login: (username: string, password: string) =>
     request<{ user: UserDto }>('POST', '/api/auth/login', { username, password }),
+  logout: () => request<object>('POST', '/api/auth/logout'),
   me: () => request<{ user: UserDto }>('GET', '/api/me'),
   listRooms: () => request<{ rooms: RoomListItem[] }>('GET', '/api/rooms'),
-  createRoom: (game: GameType) => request<{ room: RoomSnapshot }>('POST', '/api/rooms', { game }),
+  createRoom: (game: GameType, capacity?: number) =>
+    request<{ room: RoomSnapshot }>('POST', '/api/rooms', capacity === undefined ? { game } : { game, capacity }),
   createAiGame: () => request<{ room: RoomSnapshot }>('POST', '/api/chess/ai-games', {}),
   addPokerBot: (id: string) => request<{ room: RoomSnapshot }>('POST', `/api/rooms/${encodeURIComponent(id)}/poker/bots`, {}),
   joinRoom: (id: string) => request<{ room: RoomSnapshot }>('POST', `/api/rooms/${encodeURIComponent(id)}/join`),
@@ -58,5 +67,5 @@ export const api = {
 };
 
 export function errorMessage(err: unknown): string {
-  return err instanceof ApiRequestError ? err.message : '网络错误，请重试';
+  return err instanceof ApiRequestError ? err.message : NETWORK_ERROR_MESSAGE;
 }

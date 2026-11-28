@@ -29,14 +29,14 @@
 
 ## 账号
 
-`User` 对象：`{ id, username, rating, chips, currentRoomId }`，`currentRoomId` 为当前所在房间 id 或 `null`。
+`User` 对象：`{ id, username, rating, chips, currentRoomId, activeRoomId }`，`currentRoomId` 为当前所在房间 id 或 `null`；`activeRoomId` 为“有进行中的对局”的房间 id 或 `null`（所在房间存在且未关闭时等于 `currentRoomId`，否则为 `null`），大厅据此显示“回到对局”。
 
 ### POST /api/auth/register
 
 请求 `{ "username": "alice", "password": "..." }`。用户名、密码去掉首尾空白后不能为空（原样保存）；用户名区分大小写且唯一。
 
 - `201 { user }`，并设置会话 Cookie（注册即登录）。新用户积分 1000、筹码 1000。
-- `400 VALIDATION_FAILED`、`409 USERNAME_TAKEN`。
+- `400 VALIDATION_FAILED`（消息逐项说明：`用户名为必填项`、`密码为必填项`、`用户名不能超过 200 个字符`、`密码不能超过 200 个字符`，先检查用户名）、`409 USERNAME_TAKEN`。
 
 ### POST /api/auth/login
 
@@ -44,6 +44,12 @@
 
 - `200 { user }`，并设置会话 Cookie。
 - `401 INVALID_CREDENTIALS`（用户不存在与密码错误同一提示）、`400 VALIDATION_FAILED`。
+
+### POST /api/auth/logout
+
+吊销当前会话并清除会话 Cookie；之后用旧 Cookie 访问受保护接口得到 `401`。没有会话时同样成功（幂等）。
+
+- `204`（无响应体）。
 
 ### GET /api/me
 
@@ -63,7 +69,7 @@
   - 牌面为两位字符串：点数 `23456789TJQKA` + 花色 `s h d c`（如 `"Ah"`、`"Td"`）。
   - `seats[]`：`{seat, kind, userId?, name, chips, committedThisHand, committedThisRound, inHand, folded, atCap, waitingNextHand, isDealer, isSmallBlind, isBigBlind, holeCards?}`；`chips` 为扣除本手投入后的余额（可为负数）。`holeCards` 只对查看者本人的座位、以及摊牌时亮牌的座位出现，其他人的底牌不会出现在任何响应或推送中。
   - `actions[]`：`{seat, name, type: "small_blind"|"big_blind"|"fold"|"check"|"call"|"bet"|"raise"|"leave_fold", amount, to?}`；`to` 为下注/加注后的本轮总额。
-  - `showdown[]`：`{seat, holeCards, handRank, handLabel}`；`winners[]`：`{seat, name, amount}`（`amount` 为分得的底池）。
+  - `showdown[]`：`{seat, holeCards, handRank, handLabel, bestCards}`（`bestCards` 为该座位由底牌与公共牌组成的最佳 5 张牌，牌桌据此高亮赢家的牌）；`winners[]`：`{seat, name, amount}`（`amount` 为分得的底池）。
   - `you.legal`：只在轮到查看者时非空，`{fold, check, call, callAmount, bet, raise, minRaiseTo, maxRaiseTo}`。
 
 ### GET /api/rooms
@@ -72,10 +78,11 @@
 
 ### POST /api/rooms
 
-请求 `{ "game": "chess" | "poker" }`。象棋房间 2 人，德州扑克房间 9 座。创建者成为房主并进入房间。
+请求 `{ "game": "chess" | "poker", "capacity"?: number }`。象棋房间 2 人（忽略 `capacity`）；德州扑克房间人数上限 `capacity` 为 2～9 的整数，缺省 9，只开放前 `capacity` 个座位（电脑玩家计入人数，满员后加入与添加电脑都返回 `409 ROOM_FULL`）。创建者成为房主并进入房间。
 
 - `201 { room: RoomSnapshot }`。
-- `400 VALIDATION_FAILED`、`409 ALREADY_IN_ROOM`（同一时间只能在一个房间）。
+- `400 VALIDATION_FAILED`（`capacity` 不是 2～9 的整数时消息为 `人数上限必须是 2～9 的整数`）、`409 ALREADY_IN_ROOM`（同一时间只能在一个房间）。
+- 隐式释放：用户仍留在一个已结束的象棋对局房间（结果画面）时，创建房间、创建人机对局（`POST /api/chess/ai-games`）与加入房间会先让其离开该房间（不再计分；其余成员收到 `room:state`，房间无人即关闭），用于“再来一局”和结束后直接加入别的房间。
 
 ### POST /api/rooms/:id/join
 
@@ -96,6 +103,8 @@
 - `POST /api/rooms/:id/chess/draw-offer`：提和；同时只能有一个待回应的提和（`409 DRAW_OFFER_PENDING`）。
 - `POST /api/rooms/:id/chess/draw-response`，请求 `{ "accept": true|false }`：只有被提和的一方可回应（`409 NO_DRAW_OFFER`）；同意即和棋。
 
+房间快照中的 `chess.legalMoves`：仅当对局进行中且轮到请求者走时为 `{ [from]: to[] }`（只含有合规着法的己方棋子，盖棋按开局位置的棋子走法，与 `move` 的判定一致），其他情况（对方回合、观看者、等待中、已结束）为 `null`。前端选子后的可走位置只取自该字段。
+
 对局结束（将死或困毙判负、认输、离开即认输、同意和棋、双方只剩将帅自动和棋）时在房间锁内写库结算：胜 +10、负 −10、和 0，每局只结算一次。结束后房间从大厅移除，成员仍留在房间内直至“返回大厅”（调用 leave）；离开已结束的对局不再计分。
 
 ### POST /api/chess/ai-games
@@ -109,7 +118,7 @@
 以下接口成功均返回 `200 { room }`（请求者视角），并向房间其他成员推送各自视角的 `room:state`。通用错误：`403 NOT_IN_ROOM`、`404 ROOM_NOT_FOUND`。被拒绝的操作不改变牌局状态。
 
 - `POST /api/rooms/:id/poker/start`：仅房主；至少 2 名玩家入座（`409 NOT_ENOUGH_PLAYERS`）、当前无进行中的牌局（`409 HAND_IN_PROGRESS`），非房主 `403 NOT_HOST`。庄家位从房主开始，每手顺时针轮转；单挑时庄家下小盲、翻牌前先行动。
-- `POST /api/rooms/:id/poker/bots`，请求 `{}`，`201 { room }`：仅房主（`403 NOT_HOST`）在无进行中的手牌时（`409 HAND_IN_PROGRESS`）添加电脑玩家“电脑 1”“电脑 2”…，占一个座位并计入人数（满 9 人 `409 ROOM_FULL`）。电脑玩家筹码 1000、只在本房间内存中，不影响任何用户的积分或余额；轮到它时约 `POKER_BOT_DELAY_MS`（默认 800ms）后自动按合规行动入口行动。房间无真人时随房间移除。
+- `POST /api/rooms/:id/poker/bots`，请求 `{}`，`201 { room }`：仅房主（`403 NOT_HOST`）在无进行中的手牌时（`409 HAND_IN_PROGRESS`）添加电脑玩家“电脑 1”“电脑 2”…，占一个座位并计入人数（达到房间人数上限时 `409 ROOM_FULL`）。电脑玩家筹码 1000、只在本房间内存中，不影响任何用户的积分或余额；轮到它时约 `POKER_BOT_DELAY_MS`（默认 800ms）后自动按合规行动入口行动。房间无真人时随房间移除。
 - `POST /api/rooms/:id/poker/action`，请求 `{ "type": "fold"|"check"|"call"|"bet"|"raise", "amount"?: n }`：`amount` 为下注/加注后的本轮总额（“下注到”），`bet`/`raise` 必填正整数。`400 VALIDATION_FAILED`、`409 GAME_NOT_ACTIVE`（无进行中的牌局）、`409 NOT_YOUR_TURN`、`409 ILLEGAL_ACTION`（如有下注时过牌、无下注时跟注、加注额不足或超过每手 1000 上限）。
 
 每手结束（只剩一人或摊牌）时按净输赢写库结算筹码（每手只结算一次，余额可为负数；写库失败时后台每 5 秒重试），随后约 4 秒（`POKER_NEXT_HAND_DELAY_MS`）自动开始下一手（不足 2 人时停在 `idle`）。牌局中加入的玩家标记 `waitingNextHand`，下一手入局；牌局中离开视为弃牌，按已投入额结算。

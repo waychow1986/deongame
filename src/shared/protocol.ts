@@ -39,6 +39,8 @@ export interface UserDto {
   rating: number;
   chips: number;
   currentRoomId: string | null;
+  /** Room of the user's unfinished game (room not closed), else null. */
+  activeRoomId: string | null;
 }
 
 export interface RoomListItem {
@@ -69,6 +71,11 @@ export interface ChessView {
   yourColor: ChessColor | null;
   turn: ChessColor;
   inCheck: boolean;
+  /**
+   * Legal targets per own piece for the viewer; only while the game is active and it is the viewer's turn,
+   * otherwise null. Covered pieces move as the opening piece of their square (FR-040).
+   */
+  legalMoves: Record<string, string[]> | null;
   /** Occupied squares only; covered pieces are always `hidden`, for every viewer. */
   board: ChessSquareView[];
   captured: { side: ChessColor; piece: ChessPieceType }[];
@@ -156,7 +163,8 @@ export interface PokerView {
   seats: PokerSeatView[];
   /** `amount` is what the action put in; `to` is the round total after a bet / raise. */
   actions: { seat: number; name: string; type: PokerLogType; amount: number; to?: number }[];
-  showdown: { seat: number; holeCards: string[]; handRank: PokerHandRank; handLabel: string }[];
+  /** `bestCards` are the five cards forming the seat's best hand (from hole cards and board). */
+  showdown: { seat: number; holeCards: string[]; handRank: PokerHandRank; handLabel: string; bestCards: string[] }[];
   winners: { seat: number; name: string; amount: number }[];
   you: { seat: number | null; legal: PokerLegalActions | null };
 }

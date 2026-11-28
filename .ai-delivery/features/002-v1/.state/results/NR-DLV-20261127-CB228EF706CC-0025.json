@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "stepId": "S42",
+  "result": "done",
+  "summary": "按 S43 审查补强测试：AC-28 集成测试改为校验 bestCards 牌型等于 handRank、分数等于七张最优（把 bestCards 改成前五张的变异下失败，恢复后通过）；AC-28/AC-22 摊牌 e2e 改为高亮集合等于 API 赢家 bestCards，结果文案包含牌型名，并校验花色图形与红黑颜色；新增 3 个 e2e：AC-27/AC-21 行动高亮随回合移动并在所有人页面一致，弃牌与等待下一手状态；AC-21 通过公开对局造出负余额后红色 rgb(214, 48, 49) 与 data-negative；AC-24 收筹码与翻牌中间帧。新的 AC-24 用例发现缺陷：以过牌结束一轮时底池金额不变，筹码推入底池的动画没有触发。已先补单元复现测试（修改前失败，修改后通过），并把 src/shared/ui/events.ts 中 collect 的条件从 pot 增加改为 pot 不减少。其余变异检查（data-acting 恒为 false、去掉负值标记、高亮全部底牌、弃牌状态返回空、翻牌动画不执行）都使对应 e2e 失败，恢复后通过。实际运行：lint、typecheck、build 通过；单元测试 140 项全部通过（约 7 秒）；集成测试 54 项全部通过（约 4 秒）；新写或改动的 4 个 e2e 在 chromium 和 mobile 上共 8 次通过（约 17 秒）；未改动的既有 e2e 没有运行，交由 G3 独立测试验证。",
+  "asks": [],
+  "outputs": [
+    "tests/integration/poker.test.ts",
+    "tests/unit/uiEvents.test.ts",
+    "e2e/table.spec.ts",
+    "src/shared/ui/events.ts"
+  ]
+}

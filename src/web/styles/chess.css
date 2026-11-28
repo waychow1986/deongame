@@ -1,0 +1,332 @@
+/* Chinese chess board (TD-011/TD-012): wood board, SVG lines, round wooden pieces on intersections. */
+.room-page {
+  overflow-x: hidden;
+}
+
+.chess-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.xq-board {
+  position: relative;
+  aspect-ratio: 9 / 10;
+  width: min(100%, calc((100dvh - 220px) * 0.9), 640px);
+  min-width: 270px;
+  max-width: 100%;
+  margin: 0 auto;
+  border-radius: 8px;
+  /* The frame is a shadow, not a border, so the box stays exactly the 9×10 grid (design geometry contract). */
+  box-shadow:
+    0 0 0 3px #7a4e1d,
+    0 6px 18px rgba(60, 35, 10, 0.35),
+    inset 0 0 24px rgba(90, 50, 10, 0.25);
+  background:
+    repeating-linear-gradient(
+      100deg,
+      rgba(140, 90, 40, 0.08) 0 6px,
+      rgba(255, 230, 180, 0.06) 6px 13px,
+      rgba(120, 75, 30, 0.07) 13px 17px
+    ),
+    radial-gradient(ellipse at 30% 20%, #f1cf92 0%, #dcaa62 55%, #c48d48 100%);
+  container-type: inline-size;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.xq-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  stroke: #5a3511;
+  stroke-width: 1.2;
+  fill: none;
+}
+
+.xq-lines * {
+  vector-effect: non-scaling-stroke;
+}
+
+.xq-river {
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  top: 45%;
+  height: 10%;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  pointer-events: none;
+  font-family: 'KaiTi', 'STKaiti', 'Kaiti SC', serif;
+  font-size: clamp(14px, 6cqi, 34px);
+  color: rgba(90, 53, 17, 0.75);
+  letter-spacing: 0.4em;
+}
+
+.xq-board[data-orientation='black-bottom'] .xq-river {
+  flex-direction: row-reverse;
+}
+
+.xq-grid {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  grid-template-rows: repeat(10, 1fr);
+}
+
+.xq-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.xq-cell:focus-visible {
+  outline: 2px solid #2a7de1;
+  outline-offset: -2px;
+}
+
+.xq-cell[data-marks~='last-from']::before,
+.xq-cell[data-marks~='last-to']::before {
+  content: '';
+  position: absolute;
+  inset: 4%;
+  border: 2px solid rgba(42, 125, 225, 0.75);
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+.xq-cell[data-marks~='last-from']::before {
+  border-style: dashed;
+}
+
+.xq-piece {
+  position: absolute;
+  width: 88%;
+  height: 88%;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  backface-visibility: hidden;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.xq-piece.face {
+  background: radial-gradient(circle at 35% 30%, #fff4dc 0%, #f1d9a6 55%, #d8b277 100%);
+  box-shadow:
+    0 2px 3px rgba(40, 20, 0, 0.45),
+    inset 0 -2px 3px rgba(120, 80, 30, 0.35);
+}
+
+.xq-piece.face::after {
+  content: '';
+  position: absolute;
+  inset: 9%;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  opacity: 0.7;
+}
+
+.xq-piece.face.red {
+  color: #c0392b;
+}
+
+.xq-piece.face.black {
+  color: #1f1f1f;
+}
+
+.xq-char {
+  font-family: 'KaiTi', 'STKaiti', 'Kaiti SC', 'Songti SC', serif;
+  font-weight: 700;
+  font-size: clamp(13px, 6.2cqi, 38px);
+  line-height: 1;
+}
+
+.xq-piece.back {
+  box-shadow:
+    0 2px 3px rgba(20, 10, 0, 0.5),
+    inset 0 -2px 3px rgba(0, 0, 0, 0.3);
+}
+
+.xq-piece.back.red {
+  background: radial-gradient(circle at 35% 30%, #e0543e 0%, #b8321f 60%, #8c2112 100%) #b8321f;
+  outline: 2px solid #d4a437;
+  outline-offset: -6px;
+}
+
+.xq-piece.back.red::after {
+  content: '';
+  position: absolute;
+  inset: 22%;
+  border-radius: 50%;
+  border: 2px solid #d4a437;
+}
+
+.xq-piece.back.black {
+  background: radial-gradient(circle at 35% 30%, #4a5d7a 0%, #2b3a52 60%, #1a2436 100%) #2b3a52;
+  outline: 2px solid #c9ced6;
+  outline-offset: -6px;
+}
+
+.xq-piece.back.black::after {
+  content: '';
+  position: absolute;
+  inset: 22%;
+  border-radius: 50%;
+  border: 2px solid #c9ced6;
+}
+
+.xq-cell[aria-pressed='true'] .xq-piece.main {
+  transform: translateY(-3px) scale(1.06);
+  box-shadow:
+    0 0 0 3px rgba(42, 125, 225, 0.85),
+    0 6px 10px rgba(40, 20, 0, 0.45);
+}
+
+.xq-board:not([data-anim='idle']) .xq-piece.main {
+  transition: none;
+}
+
+.xq-cell[data-marks~='last-to'] .xq-piece.main {
+  z-index: 2;
+}
+
+.xq-piece.ghost {
+  z-index: 1;
+}
+
+.xq-dot {
+  position: absolute;
+  width: 26%;
+  height: 26%;
+  border-radius: 50%;
+  background: rgba(30, 140, 70, 0.8);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6);
+  pointer-events: none;
+  z-index: 3;
+}
+
+.xq-cell[data-face] .xq-dot {
+  width: 96%;
+  height: 96%;
+  background: transparent;
+  box-shadow: 0 0 0 3px rgba(30, 140, 70, 0.85);
+}
+
+.captured-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(100%, 640px);
+  min-height: 28px;
+  font-size: 14px;
+}
+
+.captured-title {
+  flex: none;
+  color: var(--color-muted, #666);
+}
+
+.captured-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.captured-list li {
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: #f4e6c8;
+}
+
+.captured-row.red .captured-list li {
+  color: #c0392b;
+}
+
+.chess-result .result-mark {
+  margin: 0 auto 4px;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 34px;
+  font-weight: 700;
+  color: #fff;
+  background: #888;
+}
+
+.chess-result[data-outcome='胜'] .result-mark {
+  background: #c0392b;
+}
+
+.chess-result[data-outcome='负'] .result-mark {
+  background: #4a5d7a;
+}
+
+.chess-result {
+  text-align: center;
+}
+
+.chess-result .actions {
+  justify-content: center;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  max-width: calc(100vw - 32px);
+  padding: 8px 16px;
+  border-radius: 18px;
+  background: rgba(30, 30, 30, 0.88);
+  color: #fff;
+  font-size: 14px;
+  z-index: 50;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+}
+
+.toast[data-visible='false'] {
+  opacity: 0;
+}
+
+.sound-hint {
+  margin: 4px 0;
+  font-size: 13px;
+  color: var(--color-muted, #666);
+}
+
+.mute-button {
+  min-width: 44px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xq-piece {
+    transition: none;
+  }
+}

@@ -2,6 +2,7 @@ import { Router, type Request } from 'express';
 import { requireAuth } from '../auth/middleware.js';
 import type { UserRow } from '../db/users.js';
 import { AppError } from '../errors.js';
+import { POKER_CAPACITY } from '../../shared/constants.js';
 import type { AppContext } from '../context.js';
 import { viewFor } from '../rooms/view.js';
 import { chessRoutes } from './chessRoutes.js';
@@ -36,11 +37,18 @@ export function roomRoutes(ctx: AppContext): Router {
   });
 
   router.post('/api/rooms', async (req, res) => {
-    const game = (req.body as Record<string, unknown> | null)?.game;
+    const body = req.body as Record<string, unknown> | null;
+    const game = body?.game;
     if (game !== 'chess' && game !== 'poker') throw new AppError('VALIDATION_FAILED');
+    const capacity = body?.capacity;
+    if (game === 'poker' && capacity !== undefined) {
+      if (typeof capacity !== 'number' || !Number.isInteger(capacity) || capacity < 2 || capacity > POKER_CAPACITY) {
+        throw new AppError('VALIDATION_FAILED', `人数上限必须是 2～${POKER_CAPACITY} 的整数`);
+      }
+    }
     const me = member(req);
-    const room = await ctx.rooms.create(me, game);
-    ctx.logger.info({ event: 'room_created', userId: me.userId, roomId: room.id, game }, 'room created');
+    const room = await ctx.rooms.create(me, game, game === 'poker' ? (capacity as number | undefined) : undefined);
+    ctx.logger.info({ event: 'room_created', userId: me.userId, roomId: room.id, game, capacity: room.capacity }, 'room created');
     res.status(201).json({ room: viewFor(room, me.userId) });
   });
 

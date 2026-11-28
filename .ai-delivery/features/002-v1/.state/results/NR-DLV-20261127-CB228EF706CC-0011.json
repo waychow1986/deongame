@@ -1,0 +1,162 @@
+{
+  "schemaVersion": 1,
+  "stepId": "S10",
+  "result": "done",
+  "summary": "测试计划按 G2 意见修订后重新细化计划：完整档，仍为 3 批编码，每批编码后各有一次代码审查，预计每批约 75～78 分钟；G2 已决定的事项按决定执行，没有新的待决定事项。",
+  "asks": [],
+  "outputs": [],
+  "plan": {
+    "schemaVersion": 1,
+    "steps": [
+      {
+        "id": "C1",
+        "capability": "code",
+        "zone": "build",
+        "dependsOn": [],
+        "batch": 1
+      },
+      {
+        "id": "R1",
+        "capability": "review",
+        "zone": "build",
+        "dependsOn": [
+          "C1"
+        ],
+        "batch": 1
+      },
+      {
+        "id": "C2",
+        "capability": "code",
+        "zone": "build",
+        "dependsOn": [
+          "R1"
+        ],
+        "batch": 2
+      },
+      {
+        "id": "R2",
+        "capability": "review",
+        "zone": "build",
+        "dependsOn": [
+          "C2"
+        ],
+        "batch": 2
+      },
+      {
+        "id": "C3",
+        "capability": "code",
+        "zone": "build",
+        "dependsOn": [
+          "R2"
+        ],
+        "batch": 3
+      },
+      {
+        "id": "R3",
+        "capability": "review",
+        "zone": "build",
+        "dependsOn": [
+          "C3"
+        ],
+        "batch": 3
+      }
+    ],
+    "omitted": [
+      {
+        "capability": "spec",
+        "reason": "规格已写成（spec.md），G2 对规格的事项 I3～I5 都定为不纳入、不改规格，不需要重写。"
+      },
+      {
+        "capability": "solution",
+        "reason": "技术方案已写成（design.md），G2 事项 I1、I2 定为不纳入、I14 按技术方案 TD-019 的公式，不需要改技术方案。"
+      },
+      {
+        "capability": "plan",
+        "reason": "本步骤就是测试计划修订后的细化计划，之后不再需要计划步骤。"
+      }
+    ],
+    "batches": [
+      {
+        "n": 1,
+        "criteria": [
+          "AC-1",
+          "AC-2",
+          "AC-3",
+          "AC-4",
+          "AC-5",
+          "AC-6",
+          "AC-7",
+          "AC-8",
+          "AC-9",
+          "AC-10",
+          "AC-30",
+          "AC-35",
+          "AC-36"
+        ]
+      },
+      {
+        "n": 2,
+        "criteria": [
+          "AC-11",
+          "AC-12",
+          "AC-13",
+          "AC-14",
+          "AC-15",
+          "AC-16",
+          "AC-17",
+          "AC-18",
+          "AC-19",
+          "AC-20",
+          "AC-31",
+          "AC-32",
+          "AC-33"
+        ]
+      },
+      {
+        "n": 3,
+        "criteria": [
+          "AC-21",
+          "AC-22",
+          "AC-23",
+          "AC-24",
+          "AC-25",
+          "AC-26",
+          "AC-27",
+          "AC-28",
+          "AC-29",
+          "AC-34"
+        ]
+      }
+    ],
+    "factors": [
+      {
+        "name": "change-size",
+        "lean": "heavy",
+        "basis": "前端 3 个页面重写、约 15 个新组件、动画与音效模块；服务端 5 个文件；约 36 条验收标准。"
+      },
+      {
+        "name": "modules",
+        "lean": "heavy",
+        "basis": "共享协议、扑克手牌、房间管理、认证、REST 路由，以及前端全部页面与样式。"
+      },
+      {
+        "name": "new-or-first",
+        "lean": "light",
+        "basis": "已有系统现状和部署声明（第一版已发布），不是新项目，也不是接管后的首个交付。"
+      },
+      {
+        "name": "risk",
+        "lean": "medium",
+        "basis": "不迁移数据库；新增退出登录接口，调整房间生命周期（隐式释放、对局保留），并需要保证暗子身份不泄露（legalMoves）。"
+      }
+    ],
+    "tier": "full",
+    "budget": {
+      "revisions": 4,
+      "sessions": 12,
+      "hours": 12.0
+    },
+    "items": [],
+    "reason": "档位：tierFloor 为完整档。改动规模 heavy（前端 3 个页面重写、约 15 个新组件、动画与音效模块，服务端 5 个文件）；涉及模块 heavy（共享协议、扑克手牌、房间管理、认证、REST 路由、前端全部页面）；新项目/接管后首个交付 light（项目已有系统现状与部署声明，第一版已上线）；数据迁移与安全风险 medium（不迁移数据库；新增退出登录接口，并调整“进行中的对局”和房间释放的生命周期，需要防止泄露暗子身份）。综合定为完整档，与下限一致。\n\n步骤：规格、技术方案和测试计划都已写成；本次是 G2 退回测试计划并修订之后的重新细化，批次与上一版计划相同。之后只剩实施区的 3 批编码，每批编码后都有该批的代码审查（完整档）。测试环境、测试脚本、关口和系统现状更新由平台按骨架补入。\n\n批次与排序（依据技术方案“技术先后依赖”）：\n- 第 1 批（AC-1～AC-10、AC-30、AC-35、AC-36）：设计令牌 tokens.css 和 base/auth/lobby 样式（依赖：令牌先于各页面样式）；协议字段 UserDto.activeRoomId 和 /api/me（TD-002）；POST /api/auth/logout 和分项的中文出错文案（TD-008、TD-009；依赖：退出接口先于“退出登录”按钮）；POST /api/rooms 的 capacity、pickFreeSeat/addPokerBot 按容量判满（TD-003；依赖：先于开房弹窗的人数上限控件），房主“添加电脑玩家”满员时置灰；shared/ui/lobby.ts 的 joinState/roomName；AuthPage、LobbyPage（顶栏、游戏卡片、开房弹窗、房间列表、每 2 秒轮询、“回到对局”）；RoomPage 的“回到大厅”“离开房间”确认（Q1、TD-021），以及连接状态条与重连后重新拉取局面（TD-017）。第一版 e2e 的 chess/ai/poker/rooms/auth 用例都要经过大厅按钮（“开中国象棋房间”“与电脑下盲棋”“开德州扑克房间”等）开房间，按依赖须与改动这些文字的提交同一批更新（多半集中改 e2e/support 的辅助函数），并新写 lobby.spec。AC-36 放在本批，因为扑克容量和房间生命周期的服务端改动从本批开始；后两批每批也全量运行单元与集成测试。预计用时：实现约 60 分钟；静态检查与构建约 1 分钟；全量单元测试约 0.3 分钟；全量集成测试约 2 分钟（估计，H-2）；新写或改动的 e2e 用例约 12 个，单独运行约 3.5 分钟（含首次构建）；写结果约 8 分钟。合计约 75 分钟。\n- 第 2 批（AC-11～AC-20、AC-31～AC-33）：协议字段 ChessView.legalMoves 和 view.ts 的输出（TD-005；依赖：协议先于前端）；RoomManager 隐式释放已结束的象棋房间（TD-006；依赖：先于“再来一局”）；shared/ui/board.ts、events.ts（diffChess/diffPoker，依赖：纯函数先于 ChessBoard 与音效模块）；ChessBoard/ChessPiece 重写（几何 TD-010～TD-012）、快照队列 useRoomFeed（TD-014）、chessAnim 动画（TD-013）、简短提示 Toast（TD-022）、ChessResultDialog 与“再来一局”（Q2）；音效 sound.ts、静音按钮（只在当前页面有效，R3）、手机静音模式提示（Q3），同时把扑克的发牌、下注、弃牌、赢得底池事件接上音效，所以 AC-31 整条在本批就能验证。测试计划引用的开发者检查 DC-01（tests/unit/legalMovesView.test.ts，AC-16）和 DC-02（tests/unit/uiEvents.test.ts，AC-31）在本批编写。新写或改动的 e2e：board.spec，以及 chess.spec、ai.spec 中受棋盘重写影响的部分。预计用时：实现约 63 分钟；静态检查与构建约 1 分钟；单元测试约 0.3 分钟；集成测试约 2 分钟；e2e 约 10 个，单独运行约 3.5 分钟；写结果约 8 分钟。合计约 78 分钟。\n- 第 3 批（AC-21～AC-29、AC-34）：hand.ts 的 showdown 记录 best，随后 view.ts 输出 bestCards（TD-007；依赖：hand.ts 先于 view.ts，协议先于前端）；shared/ui/raise.ts、seatLayout.ts（依赖：先于 PokerTable）；PokerTable、PlayingCard、SuitIcon、PokerActionBar 重写，pokerAnim 动画，本手结果展示。AC-34（手机竖屏）涉及登录、大厅、棋盘和牌桌，要等全部页面完成才能整体验证，所以放在本批，同时修正各页面在手机宽度下的样式。新写或改动的 e2e：table.spec、mobile.spec，以及 poker.spec、ai.spec 中的扑克部分。预计用时：实现约 60 分钟；静态检查与构建约 1 分钟；单元测试约 0.3 分钟；集成测试约 2 分钟；e2e 约 10 个（含手机项目），单独运行约 3.5 分钟；写结果约 8 分钟。合计约 75 分钟。\n- 批数：三批实现合计约 183 分钟，任意相邻两批合并都会远超 90 分钟，所以 3 批是最少的批数。每批都在 90 分钟以内，并留有余量。\n\n用时口径：依据技术方案的可测性约定。全量单元测试约 15 秒（估计，现有 94 个用例实测 6.6 秒），全量集成测试约 1～2 分钟（估计，未实测），单个 e2e 用例约 10～20 秒（估计），首次构建约 30 秒。只计入全量单元与集成测试，以及本批新写或改动的 e2e 用例单独运行的时间；既有 e2e 整套不运行，不计入，验收由 G3 的独立测试验证。\n\n假设与说明：\n- 本次不迁移数据库（技术方案已确认）。\n- 文案、动画时长等细节以规格和技术方案为准，不影响批次。\n- G2 已决定的事项按决定执行，不再重复提出：I1（iOS 静音开关下播放）、I2（减少动态效果时缩短动画）、I3～I5 都不纳入，所以第 2、3 批不排这些工作；第一版已有的执黑方棋盘旋转 180° 按技术方案保留，属于第 2 批棋盘重写的一部分。I14 定为快捷金额按技术方案 TD-019 的公式计算、底池取界面显示的底池（与接口 pot 一致），在第 3 批 shared/ui/raise.ts 中按这个公式实现，并配单元测试。I6～I13 是测试的判定办法，不改变编码工作；I12 把真机可听见列为测试缺口，由上线前人工试听，不排编码工作。\n- 修订后的测试计划（tasks-qa.md）对编码批次没有新增工作：TS-14 改为在兵卒、炮位为空时检查折角标记，并要求棋盘边上的位置省略外侧，这本来就属于第 2 批 board.ts 与 ChessBoard 的标记画法（FR-030、A-17）；TS-40 按第一版意图逐条回归，由 G3 的独立测试执行，规则代码本版不改（AC-36），只要求每批全量运行单元与集成测试。测试计划引用的开发者检查仍然只有 DC-01（tests/unit/legalMovesView.test.ts，AC-16）和 DC-02（tests/unit/uiEvents.test.ts，AC-31），都在第 2 批编写。\n- 这次没有新的需要人决定的事项，items 为空。"
+  }
+}
