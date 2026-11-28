@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "stepId": "S46",
+  "result": "done",
+  "summary": "按分支代码把 .ai-delivery/system-current.md 更新为本交付发布后的现状：新增退出登录接口、UserDto.activeRoomId、扑克人数上限 capacity、ChessView.legalMoves、摊牌 bestCards、已结束房间的隐式释放、src/shared/ui 模块，重写前端一节（大厅轮询、回到大厅/离开房间、棋盘与牌桌画面、动画、音效与静音、连接提示）并更新测试清单；只改动了该文件。",
+  "asks": [],
+  "outputs": [".ai-delivery/system-current.md"]
+}
